@@ -14,6 +14,9 @@ const RULE_LABEL: Record<string, string> = {
   "RULE-R05": "카테고리 조합어 검색",
   "RULE-R06": "키 타겟 검색 점유",
   "RULE-R10": "광고 추정 후보 조회",
+  "RULE-R11": "반응률 상위 크리에이터 규모",
+  "RULE-R12": "공동 게시물 반응 저하",
+  "RULE-R13": "자체 채널 운영 공백",
 };
 
 export default function ReviewPage() {
