@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 import { CroppedImage } from "@/components/crop";
-import { ImpactPanel, ImpactZone, WhereLine } from "@/components/impact";
+import { ImpactPanel, ImpactZone } from "@/components/impact";
 import { MaterialDrawer } from "@/components/material-drawer";
 import { SECTION_LABEL, useProject } from "@/components/project-context";
 import { Dialog, ErrorBox, Field, FileButton, Notice, PageIntro, Status, fmtDate } from "@/components/ui";
@@ -39,9 +39,6 @@ function CsvSection({ pid, onChanged }: { pid: string; onChanged: () => void }) 
         <div className="grow">
           <h2 id="csv-title">정량 데이터 (CSV)</h2>
           <p>올린 뒤 검토·시사점 탭에서 ‘채택’해야 계산에 쓰입니다.</p>
-          <p className="mt4">
-            <WhereLine k={kind === "facts" ? "csv.facts" : "csv.posts"} />
-          </p>
         </div>
       </div>
       <div className="row wrap">

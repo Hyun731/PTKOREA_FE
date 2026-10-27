@@ -2,7 +2,6 @@
 
 import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { WhereLine } from "@/components/impact";
 import type { ApiError, Part } from "@/lib/api";
 
 /* ------------------------------------------------------------------ toast (aria-live) */
@@ -260,7 +259,7 @@ export function ReasonButton({ label, title, help, onSubmit, danger, disabled, c
 
 export function Field({ label, help, required, error, children, className = "", impact: impactKey, row }: { label: string; help?: ReactNode; required?: boolean; error?: string; children: (id: string, describedBy?: string) => ReactNode; className?: string; impact?: string; row?: boolean }) {
   const id = useId();
-  const helpId = help || error || impactKey ? `${id}-help` : undefined;
+  const helpId = help || error ? `${id}-help` : undefined;
   const labelEl = (
     <label className="label" htmlFor={id}>
       {label}
@@ -274,7 +273,6 @@ export function Field({ label, help, required, error, children, className = "", 
   const notes = (
     <span id={helpId} className="notes">
       {error ? <span className="err">{error}</span> : help ? <span className="help">{help}</span> : null}
-      {impactKey && <WhereLine k={impactKey} />}
     </span>
   );
   if (row)

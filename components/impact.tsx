@@ -28,20 +28,6 @@ export function ImpactZone({ initial, children, className = "" }: { initial: str
 
 export const useImpactZone = () => useContext(ImpactCtx);
 
-/** The always-visible one-liner under a field. */
-export function WhereLine({ k }: { k: string }) {
-  const i = impact(k);
-  if (!i) return null;
-  const unused = i.slide === "none";
-  return (
-    <span className={`where ${unused ? "unused" : ""}`}>
-      <span aria-hidden>↳ </span>
-      <span className="sr-only">쓰이는 곳: </span>
-      {i.where}
-    </span>
-  );
-}
-
 /** Sticky right panel: slide wireframe with the active field's region highlighted. */
 export function ImpactPanel({ title = "이 칸이 쓰이는 곳" }: { title?: string }) {
   const { active } = useImpactZone();

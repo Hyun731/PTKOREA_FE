@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CropTool, CroppedImage } from "@/components/crop";
-import { ImpactZone, WhereLine, useImpactZone } from "@/components/impact";
+import { ImpactZone, useImpactZone } from "@/components/impact";
 import { SECTION_LABEL, useProject } from "@/components/project-context";
 import { Checklist, Dialog, ErrorBox, Field, FileButton, KIND_LABEL, Kind, Notice, Parts, ReasonButton, Status, fmtDate } from "@/components/ui";
 import { api, type Asset, type Claim, type FactOut, type Material } from "@/lib/api";
@@ -341,7 +341,6 @@ function ImagesPanel({ m, action, refresh }: { m: Material; action: ActionT; ref
       <div className="row wrap">
         <div className="grow" data-impact="material.image">
           <p className="small muted">PNG·JPEG·WebP, 10MB 이하. 원문 캡처가 안 되면 화면 캡처를 올려 주세요.</p>
-          <WhereLine k="material.image" />
         </div>
         {m.source.url && (
           <button
@@ -452,7 +451,7 @@ function FactsPanel({ m, action, refresh }: { m: Material; action: ActionT; refr
       <p className="small muted">장표의 숫자는 모두 여기 등록한 수치에서 나옵니다. 원문과 대조해 확인하기 전에는 장표에 쓰이지 않고, 값을 고치면 새 버전으로 기록됩니다.</p>
       <fieldset className="sub" style={{ margin: 0 }} data-impact="material.fact">
         <legend className="strong" style={{ float: "left", padding: 0, marginBottom: 8 }}>
-          수치 추가 <WhereLine k="material.fact" />
+          수치 추가
         </legend>
         <div className="grid cols-4" style={{ clear: "both" }}>
           <Field label="지표">
@@ -644,9 +643,7 @@ function ClaimsPanel({ m, action, refresh }: { m: Material; action: ActionT; ref
             </label>
           ))}
         </div>
-        <p className="small muted">
-          {KIND_LABEL[kind][2]}. 명사형으로 짧게 쓰세요. <WhereLine k={`claim.${kind}`} />
-        </p>
+        <p className="small muted">{KIND_LABEL[kind][2]}. 명사형으로 짧게 쓰세요.</p>
         <Field label="문장" help="날짜는 2026.03.15처럼 그냥 쓰면 됩니다. 수치는 아래 칩으로 넣으세요 — 직접 친 숫자는 근거가 없어 채택할 수 없습니다. 숫자가 든 이름은 [[제품명 3]]처럼 감싸세요.">
           {(id, d) => <textarea id={id} ref={inputRef} aria-describedby={d} rows={2} value={text} onChange={(e) => setText(e.target.value)} placeholder="예: 2026.03.15 신제품 공개 직후 같은 비주얼로 팝업 운영" />}
         </Field>

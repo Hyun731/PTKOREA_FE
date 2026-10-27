@@ -63,10 +63,13 @@ export default function Home() {
                 <span className="sb-dot" aria-hidden>
                   {p.name.trim().slice(0, 1) || "?"}
                 </span>
-                <span>
-                  <span className="sb-label">{p.name}</span>
-                  <br />
-                  <span className="sb-hint">{p.client}</span>
+                <span className="sb-text">
+                  <span className="sb-label" title={p.name}>
+                    {p.name}
+                  </span>
+                  <span className="sb-hint" title={p.client}>
+                    {p.client}
+                  </span>
                 </span>
               </Link>
             </li>

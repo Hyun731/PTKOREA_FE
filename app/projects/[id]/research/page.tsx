@@ -7,14 +7,6 @@ import { Dialog, ErrorBox, Field, Notice, PageIntro, ReasonButton, fmtDate, fmtD
 import { api, type ItemResult, type Job, type ResearchItem, type ResearchPlan, type Usage } from "@/lib/api";
 import { useAction, useApi, useJob } from "@/lib/hooks";
 
-// Which slides an item's material feeds (shown on every item).
-const SECTION_USE: Record<string, string> = {
-  search: "검색 장표 2-8a~d — 자동 수집하지 않습니다. 보유한 검색 지수 CSV가 있을 때만 자료 수집에서 올립니다",
-  influencer: "3-1 크리에이터 표와 Recap ‘콘텐츠·관측 성과’ — 게시물 URL을 넣고 자동 조사하면 조회·반응이 수집됩니다",
-  campaign: "C1 사례 카드 — 자동 조사가 기사·이미지·근거 문장 후보를 모읍니다. 같은 활동을 다룬 기사는 카드 하나로 묶습니다",
-  market: "M1 시장·타겟 근거 표 — 공식 통계·보고서의 수치를 모읍니다",
-};
-
 // Rough upper bound per item, so the button can say what a run may cost before it starts.
 const EST_WEB_ITEM_USD = 0.3;
 const EST_PER_POST_USD = 0.004;
@@ -70,8 +62,6 @@ function UrlEditor({ item, onClose, onSaved }: { item: ResearchItem; onClose: ()
     </Dialog>
   );
 }
-
-type ItemView = { tone: "todo" | "busy" | "done" | "off" | "warn"; text: string };
 
 export default function ResearchPage() {
   const { project, meta, brandName, reload: reloadProject } = useProject();
@@ -172,21 +162,6 @@ export default function ResearchPage() {
       await api.patch(`/research-items/${item.id}/review`, { review_status, omission_reason });
       await refresh();
     }, msg);
-
-  const view = (i: ResearchItem): ItemView => {
-    if (!selected(i)) return { tone: "off", text: "이번 조사에서 뺌" };
-    if (i.review_status === "excluded") return { tone: "off", text: `제외함 — ${i.omission_reason ?? ""}` };
-    if (["queued", "running"].includes(i.execution_status)) return { tone: "busy", text: "자동 조사 중…" };
-    const got = i.coverage.materials;
-    const dup = i.coverage.duplicates ? ` (같은 사례 ${i.coverage.duplicates}건은 묶음)` : "";
-    const gotText = i.section_id === "influencer" ? `게시물 ${i.last_result?.posts ?? 0}건 수집` : `자료 카드 ${got}건${dup} · 채택 ${i.coverage.accepted}건`;
-    if (i.review_status === "accepted") return { tone: "done", text: `확인 완료 · ${gotText}` };
-    if (i.section_id === "search") return { tone: "todo", text: "검색 지수 CSV를 올려 채웁니다" };
-    if (i.section_id === "influencer" && !hasInput(i)) return { tone: "warn", text: "게시물 URL이나 해시태그를 넣어야 조사할 수 있어요" };
-    if (i.execution_status === "failed") return { tone: "warn", text: "자동 조사 실패 — 다시 시도하거나 직접 작성하세요" };
-    if (ran(i) || got > 0) return { tone: "todo", text: `${gotText} — 결과를 보고 ‘확인 완료’를 누르세요` };
-    return { tone: "todo", text: canAuto(i) ? "아직 조사 전" : "자동 수집 키가 없어 직접 작성합니다" };
-  };
 
   const steps = [
     {
@@ -295,13 +270,11 @@ export default function ResearchPage() {
               <p>
                 {fmtDate(items[0].period_start)} ~ {fmtDate(items[0].period_end)} · {items.length}개 항목
               </p>
-              <p className="where mt4">↳ {SECTION_USE[section]}</p>
             </div>
           </div>
           <ul className="list">
             {items.map((i) => {
               const inc = selected(i);
-              const v = view(i);
               const r = i.last_result ?? {};
               const urls = urlsOf(i);
               const isRunning = ["queued", "running"].includes(i.execution_status);
@@ -335,18 +308,18 @@ export default function ResearchPage() {
               }
               return (
                 <li key={i.id} className={inc && i.review_status !== "excluded" ? "" : "dim"}>
-                  <label className="check include" style={{ alignSelf: "flex-start" }}>
-                    <input type="checkbox" checked={inc} onChange={(e) => setSelection({ ...selection, [i.id]: e.target.checked })} />
-                    <span className="small">포함</span>
-                  </label>
+                  <input
+                    type="checkbox"
+                    style={{ marginTop: 3 }}
+                    aria-label={`${i.entity} 이번 조사에 포함`}
+                    checked={inc}
+                    onChange={(e) => setSelection({ ...selection, [i.id]: e.target.checked })}
+                  />
                   <div className="grow">
                     <div className="row wrap" style={{ gap: 8 }}>
                       <span className="title">{i.entity}</span>
                       <span className="badge b-outline">{ROLE_LABEL[i.role]}</span>
                       {i.required && <span className="badge b-neutral">필수</span>}
-                    </div>
-                    <div className={`item-state ${v.tone}`}>
-                      <span aria-hidden>{{ todo: "○", busy: "◔", done: "✓", off: "–", warn: "!" }[v.tone]}</span> {v.text}
                     </div>
                     <div className="meta">
                       {i.question} · {brandName(i.brand_id)} 보고서

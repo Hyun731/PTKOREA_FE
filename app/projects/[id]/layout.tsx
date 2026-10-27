@@ -2,15 +2,16 @@
 
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { ProjectProvider, STEPS, useProject } from "@/components/project-context";
 import { useSidebarContent } from "@/components/shell";
-import { ErrorBox, fmtDate } from "@/components/ui";
+import { Dialog, ErrorBox, fmtDate } from "@/components/ui";
 import type { DeckOut } from "@/lib/api";
 import { useApi } from "@/lib/hooks";
 
 function Shell({ children }: { children: ReactNode }) {
-  const { project, error, steps } = useProject();
+  const { project, error, steps, next } = useProject();
+  const [nextOpen, setNextOpen] = useState(false);
   const pathname = usePathname() ?? "";
   const { id } = useParams<{ id: string }>();
   const synthetic = project?.name.includes("합성");
@@ -26,6 +27,25 @@ function Shell({ children }: { children: ReactNode }) {
 
   useSidebarContent(
     <>
+      {project &&
+        (next.length === 0 ? (
+          <div className="sb-next done">
+            <h2>다음 할 일</h2>
+            <p className="small muted" style={{ margin: 0 }}>
+              지금은 할 일이 없습니다.
+            </p>
+          </div>
+        ) : (
+          <div className="sb-next">
+            <h2>다음 할 일</h2>
+            <p className="small" style={{ margin: 0 }}>
+              <span className="strong">{next.length}건</span> 남았습니다
+            </p>
+            <button className="btn sm primary mt8" style={{ width: "100%" }} onClick={() => setNextOpen(true)}>
+              확인하기
+            </button>
+          </div>
+        ))}
       <nav aria-label="작업 단계">
         <ol className="sb-nav">
           {STEPS.map((s, i) => {
@@ -39,12 +59,11 @@ function Shell({ children }: { children: ReactNode }) {
                   <span className={`sb-dot ${st?.state === "done" ? "done" : st?.state === "attn" ? "attn" : ""}`} aria-hidden>
                     {mark}
                   </span>
-                  <span>
-                    <span className="sb-label">
+                  <span className="sb-text">
+                    <span className="sb-label" title={`${i + 1}. ${s.label}`}>
                       {i + 1}. {s.label}
                     </span>
-                    <br />
-                    <span className="sb-hint">
+                    <span className="sb-hint" title={st?.hint}>
                       <span className="sr-only">{stateText} · </span>
                       {st?.hint}
                     </span>
@@ -59,9 +78,8 @@ function Shell({ children }: { children: ReactNode }) {
               <span className="sb-dot" aria-hidden>
                 ▣
               </span>
-              <span>
+              <span className="sb-text">
                 <span className="sb-label">장표 스튜디오</span>
-                <br />
                 <span className="sb-hint">숫자별 근거 확인</span>
               </span>
             </Link>
@@ -94,29 +112,30 @@ function Shell({ children }: { children: ReactNode }) {
             </Link>
           </div>
         </div>
-
-        <ol className="stepbar" aria-label="작업 단계">
-          {STEPS.map((s, i) => {
-            const active = pathname.endsWith(`/${s.slug}`);
-            const st = steps[s.slug];
-            const done = st?.state === "done";
-            return (
-              <li key={s.slug} className={done ? "done" : ""}>
-                <Link href={`/projects/${id}/${s.slug}`} aria-current={active ? "step" : undefined}>
-                  <span className="num" aria-hidden>
-                    {done ? "✓" : i + 1}
-                  </span>
-                  <span className="label">{s.label}</span>
-                </Link>
-                {i < STEPS.length - 1 && <span className="connector" aria-hidden />}
-              </li>
-            );
-          })}
-        </ol>
       </div>
 
       <ErrorBox error={error} />
       {children}
+
+      {nextOpen && (
+        <Dialog variant="center" title="다음 할 일" subtitle={`${next.length}건`} onClose={() => setNextOpen(false)}>
+          <ul className="list">
+            {next.map((n, i) => (
+              <li key={i}>
+                <div className="grow">
+                  <div className="title">{n.text}</div>
+                  <div className="meta">{n.tab}</div>
+                </div>
+                <div className="actions">
+                  <Link href={n.href} className="btn sm primary" onClick={() => setNextOpen(false)}>
+                    이동
+                  </Link>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Dialog>
+      )}
     </div>
   );
 }

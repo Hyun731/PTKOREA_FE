@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { WhereLine } from "@/components/impact";
 import { MaterialDrawer } from "@/components/material-drawer";
 import { SECTION_LABEL, useProject } from "@/components/project-context";
 import { ErrorBox, Kind, Notice, PageIntro, Parts, ReasonButton, Stat, Status } from "@/components/ui";
@@ -89,7 +88,6 @@ export default function ReviewPage() {
                   <div className="meta num">
                     유효 {b.valid_rows}/{b.total_rows}행 · 중복 정리 {b.duplicates.length} · 오류 {b.errors.length}
                   </div>
-                  <WhereLine k={b.kind === "facts" ? "csv.facts" : "csv.posts"} />
                   {b.errors.length > 0 && (
                     <details className="more">
                       <summary>오류 행 {b.errors.length}개 보기</summary>
@@ -165,7 +163,6 @@ export default function ReviewPage() {
                   <div>
                     {f.label} <strong className="num">{f.display}</strong>
                   </div>
-                  <WhereLine k="material.fact" />
                   <div className="meta">
                     {f.material.title} · 측정 {f.measured_at}
                     {f.material.source.url && (
@@ -195,7 +192,6 @@ export default function ReviewPage() {
                   <Parts parts={c.parts} />
                   <div className="meta">{c.material.title}</div>
                   {c.quote && <div className="meta">원문: “{c.quote.slice(0, 140)}{c.quote.length > 140 ? "…" : ""}”</div>}
-                  <WhereLine k={`claim.${c.kind}`} />
                   {c.issues.map((i) => (
                     <div key={i} className="small" style={{ color: "var(--bad)", fontWeight: 600 }}>
                       {i}
@@ -299,7 +295,6 @@ function LeadProposals({ pid, onChanged }: { pid: string; onChanged: () => void 
         <div className="grow">
           <h2 id="q-lead">AI 리드 문장 후보</h2>
           <p>장표에 보이는 수치만 써서 리드를 다듬습니다.</p>
-          <p className="where mt4">↳ 각 장표 제목 아래 큰 글씨 리드 문장</p>
         </div>
         <button className="btn" onClick={start} disabled={!meta?.providers.anthropic || running || action.busy}>
           {running ? "만드는 중…" : "AI 리드 후보 만들기"}

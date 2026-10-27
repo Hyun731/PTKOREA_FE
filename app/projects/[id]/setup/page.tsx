@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ImpactPanel, ImpactZone, WhereLine } from "@/components/impact";
+import { ImpactPanel, ImpactZone } from "@/components/impact";
 import { ProjectForm, type ProjectDraft } from "@/components/project-form";
 import { SECTION_LABEL, useProject } from "@/components/project-context";
 import { ErrorBox, Notice, PageIntro, Status, fmtDate } from "@/components/ui";
@@ -60,9 +60,6 @@ export default function SetupPage() {
                 <p>
                   전체 기간: <strong className="num">{fmtDate(project.config.period.start)} ~ {fmtDate(project.config.period.end)}</strong> — 다를 때만 체크 해제
                 </p>
-                <p className="mt4">
-                  <WhereLine k="project.windows" />
-                </p>
               </div>
             </div>
             <div className="frows">
@@ -111,7 +108,6 @@ export default function SetupPage() {
                   <span className="num">
                     {project.comparison_window.label} · {fmtDate(project.comparison_window.start)} ~ {fmtDate(project.comparison_window.end)}
                   </span>
-                  <span className="where">↳ 2-8a 브랜드명 검색 점유의 12개월 막대 기간</span>
                 </div>
               </div>
             </div>
