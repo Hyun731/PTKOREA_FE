@@ -11,7 +11,7 @@ import { ErrorBox, fmtDateTime } from "@/components/ui";
 import { api, type Meta, type ProjectOut } from "@/lib/api";
 import { useAction, useApi } from "@/lib/hooks";
 
-type Row = { id: string; name: string; client: string; version: number; updated_at: string; brands: string[] };
+type Row = { id: string; name: string; client: string; version: number; updated_at: string; brands: string[]; total_cost_usd: number };
 
 const FIELD_LABEL: Record<string, string> = { name: "프로젝트 이름", client: "고객사", period: "조사 기간", brands: "브랜드" };
 
@@ -180,6 +180,9 @@ export default function Home() {
                   <div className="meta">
                     {p.client} · 자사 {p.brands.join(", ")} · 마지막 수정 {fmtDateTime(p.updated_at)}
                   </div>
+                </div>
+                <div className="small muted num" title="AI·검색·게시물 수집에 쓴 누적 비용">
+                  사용 ${p.total_cost_usd.toFixed(2)}
                 </div>
                 <div className="actions">
                   <Link href={`/projects/${p.id}/output`} className="btn sm">
