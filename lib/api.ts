@@ -188,6 +188,11 @@ export type Usage = { budget_per_run_usd: number; total_cost_usd: number; provid
 
 export type LeadProposal = { id: string; slide_id: string; slide_title: string; current: { parts: Part[] }[]; parts: Part[]; status: "pending" | "accepted" | "rejected" | "failed"; attempts: number; errors: string[]; model: string | null; created_at: string };
 
+// 초안 흐름: the deck read as text (sections and slides in order).
+export type OutlineSlide = { kind: "slide"; slide_id: string; page_no: number | null; title: string; page_role: string; section: string; lead: string; points: string[]; source: string; slot_id: string | null; edited: boolean; continued: boolean };
+export type OutlineSection = { kind: "section"; title: string; subtitle: string; page_no: number | null };
+export type Outline = { flow: (OutlineSlide | OutlineSection)[]; pages: number; missing: { slot_id: string; label: string; reason: string | null }[]; omitted: { slot_id: string; label: string; reason: string | null }[]; fingerprint: string };
+
 export type ResearchPlan = { id: string; version: number; confirmed_at: string | null; scope: ScopeEntry[]; items: ResearchItem[] };
 
 export type Part = { type: "text" | "fact" | "meta" | "date" | "name" | "link"; text?: string | null; display?: string | null; fact_id?: string | null; formatter?: string | null; href?: string | null; bold?: boolean };
