@@ -103,8 +103,6 @@ function derive(id: string, p: ProjectOut | null, plan: SlidePlanOut | null, dec
   const pendingClaims = c.claims_pending - c.claims_stale;
   if (pendingClaims > 0) next.push({ text: `근거 문장 ${pendingClaims}개를 검토하세요`, href: `${base}/review`, tab: "검토·시사점" });
   if (plan) {
-    const needs = plan.counts.needs_input;
-    if (needs) next.push({ text: `장표 ${needs}개에 자료가 필요합니다 — 보충하거나 사유를 남겨 생략하세요`, href: `${base}/output`, tab: "팩트북 출력" });
     const otherBlocks = plan.qc.issues.filter((i) => i.severity === "block" && i.code !== "SLOT_NEEDS_INPUT").length;
     if (otherBlocks) next.push({ text: `출력 전 검수 차단 ${otherBlocks}건을 해결하세요`, href: `${base}/output`, tab: "팩트북 출력" });
     if (!blocks && c.materials + c.batches > 0) {

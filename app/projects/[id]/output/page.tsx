@@ -25,7 +25,7 @@ const FILE_LABEL: Record<string, [string, string]> = {
 /** Where to fix a block, in the user's words. */
 function fixLink(pid: string, i: QCIssue): { href: string; label: string } | null {
   const base = `/projects/${pid}`;
-  if (i.code === "SLOT_NEEDS_INPUT") return { href: "#plan", label: "아래 장표 계획에서 보충 또는 생략" };
+  if (i.code === "SLOT_NEEDS_INPUT") return { href: `${base}/materials`, label: "자료 수집에서 채우기" };
   if (["FOOTNOTE_MISSING", "IMAGE_MISSING", "IMAGE_NOT_ACCEPTED", "BAD_CROP"].includes(i.code)) return { href: `${base}/materials`, label: "자료 수집에서 고치기" };
   if (["UNBOUND_NUMBER", "FACT_NOT_ELIGIBLE", "SOURCE_CONFLICT", "FACT_UNLINKED"].includes(i.code)) return { href: `${base}/review`, label: "검토·시사점에서 고치기" };
   return null;
@@ -89,7 +89,7 @@ export default function OutputPage() {
       <div className="stats" aria-label="장표 현황">
         <Stat k="계획한 장표" v={plan.counts.planned} />
         <Stat k="만들 수 있는 장표" v={plan.counts.generated} tone="ok" />
-        <Stat k="자료가 필요한 장표" v={plan.counts.needs_input} tone={plan.counts.needs_input ? "warn" : undefined} />
+        <Stat k="자료가 없어 빠진 장표" v={plan.counts.needs_input} />
         <Stat k="출력 페이지 수" v={plan.counts.pages} />
       </div>
       <ErrorBox error={action.error} />
@@ -182,9 +182,6 @@ export default function OutputPage() {
                 </td>
                 <td className="small">{s.readiness === "ready" ? `${s.slide_ids.length}장 생성` : s.reason}</td>
                 <td style={{ textAlign: "right" }}>
-                  {s.readiness === "needs_input" && (
-                    <ReasonButton label="이번엔 생략" title={`‘${s.label}’ 장표 생략`} help="생략 사유는 빌드 리포트에 남고, 목차와 페이지 번호가 다시 계산됩니다." onSubmit={(r) => action.run(async () => { await api.put(`/projects/${pid}/slot-omissions/${encodeURIComponent(s.slot_id)}`, { reason: r }); await refresh(); }, "장표를 생략했습니다").then(() => undefined)} />
-                  )}
                   {s.readiness === "omitted" && (
                     <button className="btn sm ghost" onClick={() => action.run(async () => { await api.del(`/projects/${pid}/slot-omissions/${encodeURIComponent(s.slot_id)}`); await refresh(); }, "생략을 취소했습니다")}>
                       생략 취소
