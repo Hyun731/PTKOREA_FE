@@ -58,6 +58,7 @@ function resultLine(r: ItemResult): string {
   if (r.duplicates) bits.push(`같은 사례 ${r.duplicates}건은 기존 카드에 묶음`);
   if (r.skipped_existing) bits.push(`이미 있는 URL ${r.skipped_existing}건 건너뜀`);
   if (r.out_of_period) bits.push(`조사 기간 밖 ${r.out_of_period}건 제외`);
+  if (r.off_topic) bits.push(`대상을 언급하지 않는 검색 결과 ${r.off_topic}건 건너뜀`);
   if (r.reason) bits.push(r.reason);
   return bits.join(" · ");
 }

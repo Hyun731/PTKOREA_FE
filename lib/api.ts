@@ -175,6 +175,7 @@ export type ItemResult = {
   posts?: number;
   skipped_existing?: number;
   out_of_period?: number;
+  off_topic?: number;
   discovered?: { hashtags: string[]; found: number; in_period_creator: number; added: number; out_of_period: number; official: number; duplicate: number };
   duplicates?: number;
   batch_id?: string;
