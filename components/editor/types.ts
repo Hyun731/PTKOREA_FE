@@ -64,6 +64,7 @@ export type Slide = {
   template_id: string;
   page_role: string;
   section_id?: string | null;
+  chapter?: string | null; // 3C part the page sits in
   brand_id?: string | null;
   title: string;
   blocks: Block[];

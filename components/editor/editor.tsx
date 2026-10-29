@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { api, ApiError, fileUrl, API_URL } from "@/lib/api";
 import { AiPanel, type ChatMsg } from "./ai-panel";
+import { MaterialsPanel } from "./materials-panel";
 import { Canvas, type Tool } from "./canvas";
 import {
   blankSlide, clampRegion, duplicateSlide, mapBlocks, mapSlide, newBlockId, scaleText, setRegions, setTextColor, setWeight, shapeBox, slideLabel, textBox,
@@ -84,6 +85,7 @@ export function DeckEditor({ deckId }: { deckId: string }) {
   const [presentMenu, setPresentMenu] = useState(false);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [picker, setPicker] = useState(false);
+  const [side, setSide] = useState<"ai" | "materials">("ai");
   const [shapeMenu, setShapeMenu] = useState(false);
   const [qcOpen, setQcOpen] = useState(false);
   const [log, setLog] = useState<EditLogEntry[]>([]);
@@ -851,7 +853,19 @@ export function DeckEditor({ deckId }: { deckId: string }) {
         )}
         </div>
 
-        {/* ------------------------------------------------ AI */}
+        {/* ------------------------------------------------ AI · 자료 */}
+        <div className="ed-right">
+        <div className="ed-tabs" role="tablist" aria-label="오른쪽 패널">
+          <button type="button" role="tab" aria-selected={side === "ai"} className={side === "ai" ? "on" : ""} onClick={() => setSide("ai")}>
+            AI 편집
+          </button>
+          <button type="button" role="tab" aria-selected={side === "materials"} className={side === "materials" ? "on" : ""} onClick={() => setSide("materials")}>
+            이 장의 자료
+          </button>
+        </div>
+        {side === "materials" ? (
+          <MaterialsPanel projectId={meta.project_id} slide={slide ?? null} slides={slides} stale={meta.stale} />
+        ) : (
         <AiPanel
           slideNo={idx + 1}
           slideTitle={slide ? slideLabel(slide) : ""}
@@ -886,6 +900,8 @@ export function DeckEditor({ deckId }: { deckId: string }) {
           onRestore={restore}
           busyLog={readOnly}
         />
+        )}
+        </div>
       </div>
 
       {picker && (
