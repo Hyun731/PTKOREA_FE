@@ -60,6 +60,7 @@ function derive(id: string, p: ProjectOut | null, plan: SlidePlanOut | null, dec
     research: { state: "todo", hint: "" },
     materials: { state: "todo", hint: "" },
     review: { state: "todo", hint: "" },
+    draft: { state: "todo", hint: "" },
     output: { state: "todo", hint: "" },
   };
   const next: NextStep[] = [];
@@ -85,6 +86,11 @@ function derive(id: string, p: ProjectOut | null, plan: SlidePlanOut | null, dec
   steps.review = {
     state: pendingReview > 0 ? "attn" : c.materials_accepted + c.batches > 0 ? "done" : "todo",
     hint: pendingReview > 0 ? `검토 대기 ${pendingReview}` : "대기 없음",
+  };
+
+  steps.draft = {
+    state: plan && plan.counts.generated > 0 ? (c.decks > 0 ? "done" : "todo") : "todo",
+    hint: plan ? `장표 ${plan.counts.generated}개` : "",
   };
 
   const blocks = plan?.qc.blocks ?? 0;
@@ -121,6 +127,7 @@ export const STEPS: { slug: string; label: string; desc: string }[] = [
   { slug: "research", label: "조사 계획", desc: "모을 자료 항목 정하기" },
   { slug: "materials", label: "자료 확인", desc: "요약 읽고 문장 골라 채택" },
   { slug: "review", label: "검토·시사점", desc: "사람이 채택·수정" },
+  { slug: "draft", label: "초안 흐름", desc: "글로 장표 흐름 보고 고치기" },
   { slug: "output", label: "팩트북 출력", desc: "PPTX·원장 내보내기" },
 ];
 

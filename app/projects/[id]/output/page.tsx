@@ -83,7 +83,7 @@ export default function OutputPage() {
 
   return (
     <div className="stack-lg">
-      <PageIntro step="5단계" title="팩트북 출력">검수를 통과하면 초안을 만들고 내보냅니다.</PageIntro>
+      <PageIntro step="6단계" title="팩트북 출력">검수를 통과하면 초안을 만들고 내보냅니다.</PageIntro>
       {plan.synthetic_data && <Notice tone="warn">정량 장표가 합성 테스트 자료로 만들어집니다. 해당 장표와 표지에 ‘합성 테스트 자료’가 표시됩니다.</Notice>}
 
       <div className="stats" aria-label="장표 현황">
