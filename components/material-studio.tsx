@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { ChatThread, type ChatMessage } from "@/components/chat";
 import { CroppedImage } from "@/components/crop";
-import { useProject } from "@/components/project-context";
 import { Dialog, ErrorBox, FileButton, Status, fmtDate } from "@/components/ui";
 import { api, type Asset, type Claim, type FactOut, type Material } from "@/lib/api";
 import { useAction, useApi } from "@/lib/hooks";
@@ -50,8 +49,7 @@ function FillIn({ label, type = "text", onSave }: { label: string; type?: "text"
 const FACT_STATE: Record<string, [string, string]> = { eligible: ["맞음", "b-ok"], rejected: ["뺌", "b-outline"], candidate: ["확인 전", "b-warn"] };
 
 /** Middle: what this material is — image, source, 해석 요약, numbers from the page. Gaps are filled in place. */
-function UnderstandPane({ m, onChanged }: { m: Material; onChanged: () => Promise<void> }) {
-  const { project } = useProject();
+function UnderstandPane({ m, projectId, onChanged }: { m: Material; projectId: string; onChanged: () => Promise<void> }) {
   const asset = m.assets.find((a) => a.id === m.selected_asset_id) ?? m.assets.find((a) => a.review_status !== "excluded");
   const others = m.assets.filter((a) => a.review_status !== "excluded");
   const action = useAction();
@@ -77,7 +75,7 @@ function UnderstandPane({ m, onChanged }: { m: Material; onChanged: () => Promis
   const fromSource = () => run(() => api.post(`/materials/${m.id}/fetch-source`), "원문에서 이미지와 정보를 가져왔습니다");
   const patch = (changes: Record<string, string>) => run(() => api.patch(`/materials/${m.id}`, { base_version: m.version, ...changes }));
   const fact = (f: FactOut, action_: "confirm" | "reject") =>
-    run(() => api.patch(`/facts/${f.id}/review?project_id=${project?.id}`, { action: action_, note: action_ === "reject" ? "자료 카드에서 뺌" : undefined }));
+    run(() => api.patch(`/facts/${f.id}/review?project_id=${projectId}`, { action: action_, note: action_ === "reject" ? "자료 카드에서 뺌" : undefined }));
   const summarize = () => run(() => api.post(`/materials/${m.id}/summary`));
   const date = m.activity_date ?? m.source.published_at;
   return (
@@ -300,7 +298,7 @@ function WritePane({ m, onChanged }: { m: Material; onChanged: () => Promise<voi
 }
 
 /** One material, understood and decided on one screen. */
-export function MaterialStudio({ id, onClose, onChanged }: { id: string; onClose: () => void; onChanged: () => void }) {
+export function MaterialStudio({ id, projectId, onClose, onChanged }: { id: string; projectId: string; onClose: () => void; onChanged: () => void }) {
   const { data: m, reload } = useApi<Material>(`/materials/${id}`);
   const action = useAction();
   const refresh = async () => {
@@ -351,7 +349,7 @@ export function MaterialStudio({ id, onClose, onChanged }: { id: string; onClose
       ) : (
         <div className="studio with-chat">
           <ChatSide m={m} />
-          <UnderstandPane m={m} onChanged={refresh} />
+          <UnderstandPane m={m} projectId={projectId} onChanged={refresh} />
           <WritePane m={m} onChanged={refresh} />
         </div>
       )}

@@ -440,7 +440,7 @@ function MaterialsInner() {
       </div>
 
       {adding && <NewMaterialDialog pid={pid} itemId={itemId} onClose={closeAdd} onCreated={(id) => { closeAdd(); changed(); setOpen(id); }} />}
-      {open && <MaterialStudio id={open} onClose={() => setOpen(null)} onChanged={changed} />}
+      {open && <MaterialStudio id={open} projectId={pid} onClose={() => setOpen(null)} onChanged={changed} />}
     </div>
   );
 }
