@@ -4,32 +4,13 @@ import { useState } from "react";
 import { Field } from "@/components/ui";
 import type { Brand, Meta, ProjectConfig } from "@/lib/api";
 
-export type ProjectDraft = Pick<ProjectConfig, "name" | "client" | "period" | "brands" | "enabled_slides" | "collection_cutoff" | "target_hypothesis">;
+export type ProjectDraft = Pick<ProjectConfig, "name" | "client" | "period" | "brands" | "collection_cutoff" | "target_hypothesis">;
 
 const split = (s: string) => s.split(",").map((x) => x.trim()).filter(Boolean);
 
 export function emptyBrand(i: number): Brand {
   return { id: `B${i + 1}`, name: "", aliases: [], categories: [], target: { age_min: null, age_max: null, gender: "all", label: "" }, competitors: [], benchmarks: [], keyword_groups: [] };
 }
-
-// What each slide shows, in one line (selection tiles).
-const TEMPLATE_DESC: Record<string, string> = {
-  "2-8a": "브랜드명 검색 점유 막대 — 보유한 검색 지수 CSV가 있을 때만",
-  "2-8b": "월별 검색 지수 선 그래프 — 보유한 검색 지수 CSV가 있을 때만",
-  "2-8c": "‘브랜드+카테고리’ 검색어 점유 — 보유한 검색 지수 CSV가 있을 때만",
-  "2-8d": "키 타겟 검색 점유 표 — 보유한 검색 지수 CSV가 있을 때만",
-  "3-1": "크리에이터 게시물 조회·반응률 표",
-  C1: "이미지·성과·시사점이 있는 사례 카드 2~4열 (한눈에 보기)",
-  C2: "사례 하나를 한 장에 — 큰 이미지·성과 요약·진행 방식·원문 발췌",
-  M1: "시장·타겟 공식 자료 요약 표",
-  "5-recap": "본문 발견을 3개 주제로 요약 (주로 검색 장표의 발견에서 나옴)",
-  "A-source": "사용한 자료의 출처·링크 표",
-  cover: "고객사·프로젝트 이름, 작성 월",
-  index: "실제로 들어간 섹션 목록",
-  divider: "섹션 시작 검은 장표",
-  end: "마지막 E.O.D 장표",
-};
-const FRAME_LABEL: Record<string, string> = { cover: "표지", index: "목차(INDEX)", divider: "섹션 구분", end: "마무리" };
 
 function ListInput({ id, describedBy, value, onChange, max, placeholder }: { id: string; describedBy?: string; value: string[]; onChange: (v: string[]) => void; max?: number; placeholder?: string }) {
   const [text, setText] = useState(value.join(", "));
@@ -117,11 +98,6 @@ function BrandEditor({ brand, onChange, onRemove, index }: { brand: Brand; onCha
 }
 
 export function ProjectForm({ value, onChange, meta }: { value: ProjectDraft; onChange: (v: ProjectDraft) => void; meta: Meta | null }) {
-  const toggle = (t: string) => {
-    const has = value.enabled_slides.includes(t);
-    onChange({ ...value, enabled_slides: has ? value.enabled_slides.filter((x) => x !== t) : [...value.enabled_slides, t] });
-  };
-  const templates = (meta?.sections ?? []).flatMap((s) => s.templates.map((t) => ({ t, section: s.label })));
   return (
     <div className="stack-lg">
       <section className="card" aria-labelledby="pf-basic">
@@ -176,51 +152,6 @@ export function ProjectForm({ value, onChange, meta }: { value: ProjectDraft; on
         </div>
       )}
 
-      <section className="card" aria-labelledby="pf-slides" data-impact="project.slides">
-        <div className="card-head">
-          <div className="grow">
-            <h3 id="pf-slides">보고서에 넣을 장표</h3>
-            <p>
-              기본값으로 {value.enabled_slides.length}개 장표가 선택되어 있습니다. 보통은 그대로 두면 됩니다 — 바꾸고 싶을 때만 아래를 펼치세요.
-            </p>
-          </div>
-        </div>
-        <details className="more">
-          <summary>장표 목록 펼쳐서 선택 바꾸기</summary>
-          <fieldset style={{ border: 0, padding: 0, margin: "14px 0 0" }}>
-            <legend className="group-title">본문 장표</legend>
-            <div className="tiles mt8">
-              {templates.map(({ t, section }) => (
-                <label key={t} className="tile">
-                  <input type="checkbox" checked={value.enabled_slides.includes(t)} onChange={() => toggle(t)} />
-                  <span>
-                    <span className="t-name">{meta?.template_labels[t] ?? t}</span>
-                    <span className="t-desc" style={{ display: "block" }}>
-                      {section} · {TEMPLATE_DESC[t]}
-                    </span>
-                  </span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
-          <fieldset style={{ border: 0, padding: 0, margin: "18px 0 0" }}>
-            <legend className="group-title">구성 장표</legend>
-            <div className="tiles mt8">
-              {["cover", "index", "divider", "end"].map((t) => (
-                <label key={t} className="tile">
-                  <input type="checkbox" checked={value.enabled_slides.includes(t)} onChange={() => toggle(t)} />
-                  <span>
-                    <span className="t-name">{FRAME_LABEL[t]}</span>
-                    <span className="t-desc" style={{ display: "block" }}>
-                      {TEMPLATE_DESC[t]}
-                    </span>
-                  </span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
-        </details>
-      </section>
     </div>
   );
 }

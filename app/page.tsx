@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { ImpactPanel, ImpactZone } from "@/components/impact";
 import { STEPS } from "@/components/project-context";
 import { ProjectForm, emptyBrand, type ProjectDraft } from "@/components/project-form";
@@ -25,14 +25,10 @@ export default function Home() {
     client: "",
     period: { start: "2026-01-01", end: "2026-09-30" },
     brands: [emptyBrand(0)],
-    enabled_slides: [],
     collection_cutoff: null,
     target_hypothesis: null,
   });
   const action = useAction();
-  useEffect(() => {
-    if (meta && draft.enabled_slides.length === 0) setDraft((d) => ({ ...d, enabled_slides: meta.default_slides }));
-  }, [meta, draft.enabled_slides.length]);
 
   const create = () =>
     action.run(async () => {

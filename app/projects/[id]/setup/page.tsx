@@ -17,7 +17,7 @@ export default function SetupPage() {
   const original = useMemo(() => {
     if (!project) return null;
     const c = project.config;
-    return { draft: { name: c.name, client: c.client, period: c.period, brands: c.brands, enabled_slides: c.enabled_slides, collection_cutoff: c.collection_cutoff, target_hypothesis: c.target_hypothesis } };
+    return { draft: { name: c.name, client: c.client, period: c.period, brands: c.brands, collection_cutoff: c.collection_cutoff, target_hypothesis: c.target_hypothesis } };
   }, [project]);
 
   useEffect(() => {
