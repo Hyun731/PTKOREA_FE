@@ -28,6 +28,7 @@ export default function DraftPage() {
   const [picked, setPicked] = useState<{ slide_id: string; title: string; page_no: number | null } | null>(null);
   const selected = picked?.slide_id ?? null;
   const [threads, setThreads] = useState<Record<string, ChatMessage[]>>({});
+  const [summaryNote, setSummaryNote] = useState("");
   const chat = useAction();
   const action = useAction();
 
@@ -56,6 +57,22 @@ export default function DraftPage() {
       await api.del(`/projects/${pid}/lead-overrides/${encodeURIComponent(s.slide_id)}`);
       await refresh();
     }, "원래 헤드라인으로 돌렸습니다");
+  const hasSummary = slides.some((s) => s.slide_id === "ES" || s.slide_id === "SWOT" || s.slide_id === "NEXT");
+  const writeSummary = () =>
+    action.run(
+      async () => {
+        const r = await api.post<{ dropped: string[] }>(`/projects/${pid}/synthesis`, { instruction: summaryNote });
+        setSummaryNote("");
+        await refresh();
+        return r;
+      },
+      (r) => (r.dropped.length ? `종합 장표를 썼습니다 · 규칙에 맞지 않는 ${r.dropped.length}줄은 뺐습니다` : "종합 장표를 썼습니다"),
+    );
+  const clearSummary = () =>
+    action.run(async () => {
+      await api.del(`/projects/${pid}/synthesis`);
+      await refresh();
+    }, "종합 장표를 뺐습니다");
   const restore = (slotId: string) =>
     action.run(async () => {
       await api.del(`/projects/${pid}/slot-omissions/${encodeURIComponent(slotId)}`);
@@ -98,6 +115,28 @@ export default function DraftPage() {
           </aside>
 
           <article className="draft-doc" aria-label="초안 흐름">
+            <div className="draft-summary">
+              <div className="grow">
+                <strong>종합 장표</strong>
+                <div className="small muted">
+                  {hasSummary
+                    ? "Executive Summary(맨 앞)와 SWOT·다음 단계(종합)가 들어 있습니다. 본문이 바뀌면 다시 쓰세요."
+                    : "본문 장표의 헤드라인으로 Executive Summary, SWOT, 다음 단계 장을 씁니다. 새 숫자는 넣지 않습니다."}
+                </div>
+                <input className="mt8" aria-label="종합 장표에 바라는 점" placeholder="바라는 점이 있으면 (예: 검색 경쟁을 과제로 앞세워 줘)" value={summaryNote}
+                  onChange={(e) => setSummaryNote(e.target.value)} />
+              </div>
+              <div className="actions">
+                <button className="btn sm primary" disabled={action.busy} onClick={writeSummary}>
+                  {action.busy ? "쓰는 중…" : hasSummary ? "다시 쓰기" : "종합 장표 만들기"}
+                </button>
+                {hasSummary && (
+                  <button className="btn sm ghost" disabled={action.busy} onClick={clearSummary}>
+                    빼기
+                  </button>
+                )}
+              </div>
+            </div>
             <p className="small muted num">
               전체 {outline.pages}쪽 · 본문 {slides.length}장{outline.missing.length > 0 && ` · 자료가 없어 빠진 장표 ${outline.missing.length}개`}
             </p>
