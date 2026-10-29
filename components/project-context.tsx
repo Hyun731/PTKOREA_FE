@@ -59,7 +59,6 @@ function derive(id: string, p: ProjectOut | null, plan: SlidePlanOut | null, dec
     setup: { state: "todo", hint: "" },
     research: { state: "todo", hint: "" },
     materials: { state: "todo", hint: "" },
-    review: { state: "todo", hint: "" },
     draft: { state: "todo", hint: "" },
     output: { state: "todo", hint: "" },
   };
@@ -77,16 +76,13 @@ function derive(id: string, p: ProjectOut | null, plan: SlidePlanOut | null, dec
     hint: c.plan_confirmed ? `항목 ${reviewed}/${items} 확인` : "계획 확정 전",
   };
 
+  const pendingReview = c.batches_pending + c.materials_candidate + c.claims_pending + c.facts_pending;
   steps.materials = {
-    state: c.materials + c.batches > 0 ? "done" : "todo",
-    hint: `자료 ${c.materials} · CSV ${c.batches}`,
+    state: pendingReview > 0 ? "attn" : c.materials + c.batches > 0 ? "done" : "todo",
+    hint: pendingReview > 0 ? `확인 대기 ${pendingReview}` : `자료 ${c.materials} · CSV ${c.batches}`,
   };
 
-  const pendingReview = c.batches_pending + c.materials_candidate + c.claims_pending + c.facts_pending;
-  steps.review = {
-    state: pendingReview > 0 ? "attn" : c.materials_accepted + c.batches > 0 ? "done" : "todo",
-    hint: pendingReview > 0 ? `검토 대기 ${pendingReview}` : "대기 없음",
-  };
+
 
   steps.draft = {
     state: plan && plan.counts.generated > 0 ? (c.decks > 0 ? "done" : "todo") : "todo",
@@ -102,12 +98,12 @@ function derive(id: string, p: ProjectOut | null, plan: SlidePlanOut | null, dec
   if (!c.plan_confirmed) next.push({ text: "조사 계획을 확인하고 확정하세요", href: `${base}/research`, tab: "조사 계획" });
   if (c.materials + c.batches === 0)
     next.push({ text: "정량 CSV를 올리거나 자료 카드를 추가하세요", href: `${base}/materials`, tab: "자료 확인" });
-  if (c.batches_pending) next.push({ text: `CSV 배치 ${c.batches_pending}개를 채택하거나 제외하세요`, href: `${base}/review`, tab: "검토·시사점" });
-  if (c.claims_stale) next.push({ text: `근거가 바뀐 문장 ${c.claims_stale}개를 다시 검토하세요`, href: `${base}/review`, tab: "검토·시사점" });
-  if (c.facts_pending) next.push({ text: `수치 ${c.facts_pending}개를 원문과 대조하세요`, href: `${base}/review`, tab: "검토·시사점" });
-  if (c.materials_candidate) next.push({ text: `자료 ${c.materials_candidate}개의 채택 여부를 정하세요`, href: `${base}/review`, tab: "검토·시사점" });
+  if (c.batches_pending) next.push({ text: `CSV 배치 ${c.batches_pending}개를 채택하거나 제외하세요`, href: `${base}/materials`, tab: "자료 확인" });
+  if (c.claims_stale) next.push({ text: `근거가 바뀐 문장 ${c.claims_stale}개를 다시 검토하세요`, href: `${base}/materials`, tab: "자료 확인" });
+  if (c.facts_pending) next.push({ text: `수치 ${c.facts_pending}개를 원문과 대조하세요`, href: `${base}/materials`, tab: "자료 확인" });
+  if (c.materials_candidate) next.push({ text: `자료 ${c.materials_candidate}개의 채택 여부를 정하세요`, href: `${base}/materials`, tab: "자료 확인" });
   const pendingClaims = c.claims_pending - c.claims_stale;
-  if (pendingClaims > 0) next.push({ text: `근거 문장 ${pendingClaims}개를 검토하세요`, href: `${base}/review`, tab: "검토·시사점" });
+  if (pendingClaims > 0) next.push({ text: `근거 문장 ${pendingClaims}개를 검토하세요`, href: `${base}/materials`, tab: "자료 확인" });
   if (plan) {
     const otherBlocks = plan.qc.issues.filter((i) => i.severity === "block" && i.code !== "SLOT_NEEDS_INPUT").length;
     if (otherBlocks) next.push({ text: `출력 전 검수 차단 ${otherBlocks}건을 해결하세요`, href: `${base}/output`, tab: "팩트북 출력" });
@@ -126,7 +122,6 @@ export const STEPS: { slug: string; label: string; desc: string }[] = [
   { slug: "setup", label: "프로젝트 설정", desc: "브랜드·경쟁사·기간" },
   { slug: "research", label: "조사 계획", desc: "모을 자료 항목 정하기" },
   { slug: "materials", label: "자료 확인", desc: "요약 읽고 문장 골라 채택" },
-  { slug: "review", label: "검토·시사점", desc: "사람이 채택·수정" },
   { slug: "draft", label: "초안 흐름", desc: "글로 장표 흐름 보고 고치기" },
   { slug: "output", label: "팩트북 출력", desc: "PPTX·원장 내보내기" },
 ];
