@@ -144,13 +144,11 @@ export function ProjectForm({ value, onChange, meta }: { value: ProjectDraft; on
           onRemove={value.brands.length > 1 ? () => onChange({ ...value, brands: value.brands.filter((_, j) => j !== i) }) : undefined}
         />
       ))}
-      {value.brands.length < 3 && (
-        <div>
-          <button className="btn" onClick={() => onChange({ ...value, brands: [...value.brands, emptyBrand(value.brands.length)] })}>
-            + 자사 브랜드 추가 <span className="faint">(최대 3개)</span>
-          </button>
-        </div>
-      )}
+      <div>
+        <button className="btn" onClick={() => onChange({ ...value, brands: [...value.brands, emptyBrand(value.brands.length)] })}>
+          + 자사 브랜드 추가
+        </button>
+      </div>
 
     </div>
   );
