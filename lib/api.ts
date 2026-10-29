@@ -225,6 +225,9 @@ export type Material = {
   duplicate_of: string | null;
   duplicate_reason: string | null;
   event_name: string | null;
+  summary: string | null; // 해석 요약: what was done, why, how it landed
+  scope_id: string | null; // its item in the 3C plan
+  role: "self" | "competitor" | "benchmark" | "market" | null;
   featured: boolean;
   duplicates: { id: string; title: string; reason: string | null; url: string | null; publisher: string | null; published_at: string | null; review_status: string }[];
   updated_at: string;
