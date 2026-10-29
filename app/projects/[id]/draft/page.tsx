@@ -8,8 +8,20 @@ import { ErrorBox, PageIntro } from "@/components/ui";
 import { api, type Outline, type OutlineSlide } from "@/lib/api";
 import { useAction, useApi } from "@/lib/hooks";
 
+// What each calculation rule found, in words (shown under the draft: they feed headlines and Recap).
+const RULE_LABEL: Record<string, string> = {
+  "RULE-R03": "월별 검색 지수",
+  "RULE-R04": "검색 점유 12개월→9개월",
+  "RULE-R05": "카테고리 조합어 검색",
+  "RULE-R06": "키 타겟 검색 점유",
+  "RULE-R10": "광고 추정 후보 조회",
+  "RULE-R11": "반응률 상위 크리에이터 규모",
+  "RULE-R12": "공동 게시물 반응 저하",
+  "RULE-R13": "자체 채널 운영 공백",
+};
+
 export default function DraftPage() {
-  const { project, reload: reloadProject } = useProject();
+  const { project, plan, brandName, reload: reloadProject } = useProject();
   const pid = project?.id;
   const { data: outline, reload, error } = useApi<Outline>(pid ? `/projects/${pid}/outline` : null);
   // Kept as picked, so the conversation stays visible after its slide is taken out.
@@ -52,7 +64,7 @@ export default function DraftPage() {
 
   return (
     <div className="stack-lg">
-      <PageIntro step="5단계" title="초안 흐름">
+      <PageIntro step="4단계" title="초안 흐름">
         PPT를 만들기 전에 장표 순서와 장마다 핵심 문장을 글로 봅니다. 장을 누르고 왼쪽에서 말로 고쳐 달라고 하세요.
       </PageIntro>
       <ErrorBox error={error ?? action.error} />
@@ -146,6 +158,22 @@ export default function DraftPage() {
                       <button className="btn sm" disabled={action.busy} onClick={() => restore(o.slot_id)}>
                         다시 넣기
                       </button>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
+            {(plan?.findings ?? []).length > 0 && (
+              <details className="more">
+                <summary>숫자로 찾은 발견 ({plan!.findings.length}) — 헤드라인과 Recap의 근거</summary>
+                {plan!.synthetic_data && <p className="small mt8" style={{ color: "var(--warn)" }}>합성 테스트 자료로 계산한 결과입니다. 실제 시장 데이터가 아닙니다.</p>}
+                <ul className="list mt8">
+                  {plan!.findings.map((f) => (
+                    <li key={f.id}>
+                      <span className="badge b-brand">{RULE_LABEL[f.rule_id] ?? f.rule_id}</span>
+                      <div className="grow">
+                        <strong>{brandName(f.brand_id)}</strong> · {f.expression}
+                      </div>
                     </li>
                   ))}
                 </ul>
