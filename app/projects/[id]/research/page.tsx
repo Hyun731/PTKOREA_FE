@@ -223,7 +223,7 @@ export default function ResearchPage() {
       const others = (project.config.scope ?? []).filter((s) => s.item_id !== e.item_id);
       await api.patch(`/projects/${pid}`, { base_version: project.version, changes: { scope: [...others, settingOf(e, on)] } });
       await refresh();
-    }, on ? `‘${specOf[e.item_id]?.title}’ 항목을 더했습니다` : `‘${specOf[e.item_id]?.title}’ 항목을 뺐습니다`);
+    }, on ? `‘${specOf[e.item_id]?.title}’ 항목을 다시 넣었습니다` : `‘${specOf[e.item_id]?.title}’ 항목을 뺐습니다 · ‘뺀 항목’에서 다시 넣을 수 있습니다`);
 
   const steps = [
     {
@@ -353,7 +353,7 @@ export default function ResearchPage() {
   return (
     <div className="stack-lg">
       <PageIntro step="2단계" title="조사 계획">
-        자사 → 경쟁사 → 소비자 순서로 무엇을 조사할지 보여 줍니다. 방향이 맞으면 조사를 시작하세요.
+        팩트북 목차 전체가 자사 → 경쟁사 → 소비자 순서로 들어 있습니다. 필요 없는 항목만 빼고, 방향이 맞으면 조사를 시작하세요.
       </PageIntro>
 
       <section className="card" aria-labelledby="todo-title">
@@ -410,7 +410,7 @@ export default function ResearchPage() {
                 <p>{part.question}</p>
               </div>
             </div>
-            {on.length === 0 && <p className="small muted">조사할 항목이 없습니다. 아래에서 더할 수 있습니다.</p>}
+            {on.length === 0 && <p className="small muted">모든 항목을 뺐습니다. 아래 ‘뺀 항목’에서 다시 넣을 수 있습니다.</p>}
             <div className="scope-list">
               {on.map((e) => {
                 const spec = specOf[e.item_id];
@@ -446,7 +446,7 @@ export default function ResearchPage() {
             </div>
             {off.length > 0 && (
               <details className="more">
-                <summary>더 조사할 항목 ({off.length})</summary>
+                <summary>뺀 항목 ({off.length})</summary>
                 <ul className="list mt8">
                   {off.map((e) => (
                     <li key={e.item_id}>
@@ -456,7 +456,7 @@ export default function ResearchPage() {
                         <div className="meta">{e.direction[0]}</div>
                       </div>
                       <button className="btn sm" disabled={action.busy} onClick={() => toggleScope(e, true)}>
-                        더하기
+                        다시 넣기
                       </button>
                     </li>
                   ))}
