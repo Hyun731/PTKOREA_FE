@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 import { CroppedImage } from "@/components/crop";
 import { ImpactPanel, ImpactZone } from "@/components/impact";
-import { MaterialDrawer } from "@/components/material-drawer";
 import { MaterialStudio } from "@/components/material-studio";
 import { useProject } from "@/components/project-context";
 import { Dialog, ErrorBox, Field, FileButton, PageIntro, Status, fmtDate } from "@/components/ui";
@@ -263,7 +262,6 @@ function MaterialsInner() {
   const itemId = params.get("item");
   const { data: materials, reload } = useApi<Material[]>(pid ? `/projects/${pid}/materials` : null);
   const [open, setOpen] = useState<string | null>(null);
-  const [detail, setDetail] = useState<string | null>(null);
   const [adding, setAdding] = useState(Boolean(itemId));
   const dedupe = useAction();
   // Extra sources of the same activity live inside their primary card, not as cards of their own.
@@ -409,8 +407,7 @@ function MaterialsInner() {
       </div>
 
       {adding && <NewMaterialDialog pid={pid} itemId={itemId} onClose={closeAdd} onCreated={(id) => { closeAdd(); changed(); setOpen(id); }} />}
-      {open && <MaterialStudio id={open} onClose={() => setOpen(null)} onChanged={changed} onDetail={() => { setDetail(open); setOpen(null); }} />}
-      {detail && <MaterialDrawer id={detail} onClose={() => setDetail(null)} onChanged={changed} />}
+      {open && <MaterialStudio id={open} onClose={() => setOpen(null)} onChanged={changed} />}
     </div>
   );
 }
