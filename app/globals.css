@@ -459,3 +459,12 @@ table.table input, table.table select { min-height: 38px; }
   .studio.with-chat { grid-template-columns: 1fr; }
 }
 .dir-chat .chat-log { max-height: 300px; }
+
+/* 자료 카드: 빈 곳은 그 자리에서 채운다 */
+.empty-image { border: 2px dashed var(--line-2); background: var(--surface-2); }
+.empty-image:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.thumbs { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.thumb-pick { all: unset; cursor: pointer; width: 64px; height: 44px; border-radius: 6px; overflow: hidden; border: 2px solid transparent; background: var(--surface-3); }
+.thumb-pick.on { border-color: var(--brand); }
+.thumb-pick:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.fill-in { width: auto; min-width: 0; max-width: 150px; padding: 2px 8px; min-height: 0; height: 26px; font-size: 13px; border: 1px dashed var(--brand); border-radius: 6px; background: var(--brand-soft); }

@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { ChatThread, type ChatMessage } from "@/components/chat";
 import { CroppedImage } from "@/components/crop";
-import { Dialog, ErrorBox, Status, fmtDate } from "@/components/ui";
-import { api, type Claim, type Material } from "@/lib/api";
+import { useProject } from "@/components/project-context";
+import { Dialog, ErrorBox, FileButton, Status, fmtDate } from "@/components/ui";
+import { api, type Asset, type Claim, type FactOut, type Material } from "@/lib/api";
 import { useAction, useApi } from "@/lib/hooks";
 
 const KIND: Record<Claim["kind"], string> = { fact: "사실", interpretation: "관찰", recommendation: "제언" };
@@ -36,23 +37,93 @@ function ChatSide({ m }: { m: Material }) {
   );
 }
 
-/** Middle: what this material is — image, source, 해석 요약. */
+/** An empty spot that takes a value right where it is: blank → type → saved on Enter or leaving the field. */
+function FillIn({ label, type = "text", onSave }: { label: string; type?: "text" | "date"; onSave: (v: string) => void }) {
+  const [v, setV] = useState("");
+  const save = () => v.trim() && onSave(v.trim());
+  return (
+    <input className="fill-in" type={type} aria-label={label} placeholder={label} value={v} onChange={(e) => setV(e.target.value)} onBlur={save}
+      onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && save()} />
+  );
+}
+
+const FACT_STATE: Record<string, [string, string]> = { eligible: ["맞음", "b-ok"], rejected: ["뺌", "b-outline"], candidate: ["확인 전", "b-warn"] };
+
+/** Middle: what this material is — image, source, 해석 요약, numbers from the page. Gaps are filled in place. */
 function UnderstandPane({ m, onChanged }: { m: Material; onChanged: () => Promise<void> }) {
-  const asset = m.assets.find((a) => a.id === m.selected_asset_id) ?? m.assets[0];
+  const { project } = useProject();
+  const asset = m.assets.find((a) => a.id === m.selected_asset_id) ?? m.assets.find((a) => a.review_status !== "excluded");
+  const others = m.assets.filter((a) => a.review_status !== "excluded");
   const action = useAction();
-  const summarize = () =>
+  const run = (fn: () => Promise<unknown>, msg?: string) =>
     action.run(async () => {
-      await api.post(`/materials/${m.id}/summary`);
+      await fn();
       await onChanged();
+    }, msg);
+  // The image shown is the one the slide uses: picking or adding it also adopts it.
+  const pickImage = (a: Asset) =>
+    run(async () => {
+      await api.post(`/materials/${m.id}/select-asset`, { asset_id: a.id });
+      if (a.review_status !== "accepted") await api.patch(`/assets/${a.id}`, { review_status: "accepted" });
     });
+  const upload = (file: File) =>
+    run(async () => {
+      const fd = new FormData();
+      fd.append("file", file);
+      const a = await api.post<Asset>(`/materials/${m.id}/assets`, fd);
+      await api.post(`/materials/${m.id}/select-asset`, { asset_id: a.id });
+      await api.patch(`/assets/${a.id}`, { review_status: "accepted" });
+    }, "이미지를 넣었습니다");
+  const fromSource = () => run(() => api.post(`/materials/${m.id}/fetch-source`), "원문에서 이미지와 정보를 가져왔습니다");
+  const patch = (changes: Record<string, string>) => run(() => api.patch(`/materials/${m.id}`, { base_version: m.version, ...changes }));
+  const fact = (f: FactOut, action_: "confirm" | "reject") =>
+    run(() => api.patch(`/facts/${f.id}/review?project_id=${project?.id}`, { action: action_, note: action_ === "reject" ? "자료 카드에서 뺌" : undefined }));
+  const summarize = () => run(() => api.post(`/materials/${m.id}/summary`));
+  const date = m.activity_date ?? m.source.published_at;
   return (
     <div className="studio-pane">
-      <div className="studio-image">{asset ? <CroppedImage asset={asset} /> : <span className="muted small">이미지 없음</span>}</div>
-      <div className="small muted">
-        {m.source.publisher ?? "출처"} · {fmtDate(m.activity_date ?? m.source.published_at)}
+      {asset ? (
+        <div className="studio-image">
+          <CroppedImage asset={asset} />
+        </div>
+      ) : (
+        <div className="studio-image empty-image" tabIndex={0} aria-label="이미지 붙여넣기"
+          onPaste={(e) => {
+            const f = [...e.clipboardData.files].find((x) => x.type.startsWith("image/"));
+            if (f) upload(f);
+          }}>
+          <div className="stack" style={{ alignItems: "center", gap: 8 }}>
+            <span className="muted small">장표에 쓸 이미지가 없습니다</span>
+            <div className="row wrap" style={{ gap: 8, justifyContent: "center" }}>
+              {m.source.url && (
+                <button className="btn sm primary" disabled={action.busy} onClick={fromSource}>
+                  원문에서 가져오기
+                </button>
+              )}
+              <FileButton label="이미지 올리기" accept="image/png,image/jpeg,image/webp" onFile={upload} disabled={action.busy} />
+            </div>
+            <span className="faint small">캡처한 이미지를 여기에 붙여넣어도 됩니다</span>
+          </div>
+        </div>
+      )}
+      {(others.length > 1 || asset) && (
+        <div className="thumbs" role="group" aria-label="장표에 쓸 이미지 고르기">
+          {others.length > 1 &&
+            others.map((a) => (
+              <button key={a.id} className={`thumb-pick ${a.id === asset?.id ? "on" : ""}`} aria-pressed={a.id === asset?.id} onClick={() => pickImage(a)} disabled={action.busy}>
+                <CroppedImage asset={a} />
+              </button>
+            ))}
+          <FileButton label={others.length > 1 ? "+" : "다른 이미지 올리기"} accept="image/png,image/jpeg,image/webp" onFile={upload} disabled={action.busy} />
+        </div>
+      )}
+      <div className="small muted row wrap" style={{ gap: 6 }}>
+        {m.source.publisher ? <span>{m.source.publisher}</span> : <FillIn label="매체 이름" onSave={(v) => patch({ publisher: v })} />}
+        <span>·</span>
+        {date ? <span>{fmtDate(date)}</span> : <FillIn label="활동 날짜" type="date" onSave={(v) => patch({ activity_date: v })} />}
         {m.source.url && (
           <>
-            {" · "}
+            <span>·</span>
             <a href={m.source.url} target="_blank" rel="noreferrer">
               원문 보기 ↗
             </a>
@@ -71,8 +142,38 @@ function UnderstandPane({ m, onChanged }: { m: Material; onChanged: () => Promis
             </button>
           </div>
         )}
-        <ErrorBox error={action.error} />
       </section>
+      {m.facts.length > 0 && (
+        <section aria-labelledby={`fx-${m.id}`}>
+          <h4 id={`fx-${m.id}`}>원문 수치</h4>
+          <ul className="studio-claims">
+            {m.facts.map((f) => {
+              const [label, cls] = FACT_STATE[f.verification_status] ?? [f.verification_status, "b-outline"];
+              return (
+                <li key={f.id} className={f.verification_status === "eligible" ? "on" : ""}>
+                  <div className="grow">
+                    <strong className="num">{f.display ?? f.value}</strong> <span className="muted">{f.label}</span>
+                    {f.review_note && <div className="small faint">{f.review_note.replace(/^AI 추출 · /, "")}</div>}
+                  </div>
+                  {f.verification_status === "candidate" ? (
+                    <>
+                      <button className="btn sm ok" disabled={action.busy} onClick={() => fact(f, "confirm")}>
+                        맞음
+                      </button>
+                      <button className="btn sm ghost" disabled={action.busy} onClick={() => fact(f, "reject")}>
+                        빼기
+                      </button>
+                    </>
+                  ) : (
+                    <span className={`badge ${cls}`}>{label}</span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+      <ErrorBox error={action.error} />
     </div>
   );
 }
@@ -199,7 +300,7 @@ function WritePane({ m, onChanged }: { m: Material; onChanged: () => Promise<voi
 }
 
 /** One material, understood and decided on one screen. */
-export function MaterialStudio({ id, onClose, onChanged, onDetail }: { id: string; onClose: () => void; onChanged: () => void; onDetail: () => void }) {
+export function MaterialStudio({ id, onClose, onChanged }: { id: string; onClose: () => void; onChanged: () => void }) {
   const { data: m, reload } = useApi<Material>(`/materials/${id}`);
   const action = useAction();
   const refresh = async () => {
@@ -208,6 +309,9 @@ export function MaterialStudio({ id, onClose, onChanged, onDetail }: { id: strin
   };
   const review = (status: "accepted" | "excluded" | "candidate", msg: string) =>
     action.run(async () => {
+      // Adopting the card adopts the image it shows, so the slide has what the person saw.
+      const shown = m?.assets.find((a) => a.id === m.selected_asset_id);
+      if (status === "accepted" && shown && shown.review_status !== "accepted") await api.patch(`/assets/${shown.id}`, { review_status: "accepted" });
       await api.patch(`/materials/${id}/review`, { status });
       await refresh();
       if (status !== "candidate") onClose();
@@ -222,9 +326,6 @@ export function MaterialStudio({ id, onClose, onChanged, onDetail }: { id: strin
       footer={
         m && (
           <>
-            <button className="btn ghost" onClick={onDetail}>
-              이미지·수치·출처 편집
-            </button>
             <span className="grow" />
             <ErrorBox error={action.error} />
             {m.review_status === "excluded" ? (
