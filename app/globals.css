@@ -379,3 +379,18 @@ table.table input, table.table select { min-height: 38px; }
   .todo-steps > li { flex-wrap: wrap; }
   .menu-pop { left: 0; right: auto; }
 }
+
+/* 2단계 조사 계획: 3C 항목과 조사 방향 */
+.scope-no { width: 28px; height: 28px; border-radius: 50%; background: var(--brand); color: #fff; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.scope-id { font-size: 12.5px; font-weight: 800; color: var(--brand-text); background: var(--brand-soft); border-radius: 6px; padding: 0 6px; flex: none; }
+.scope-list { display: flex; flex-direction: column; gap: 12px; }
+.scope-item { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.scope-item h4 { margin: 0; font-size: 15.5px; }
+.direction { margin: 0; padding-left: 18px; color: var(--text-2); font-size: 14px; display: flex; flex-direction: column; gap: 2px; }
+.dir-chat { display: flex; flex-direction: column; gap: 8px; background: var(--surface-2); border-radius: var(--radius-sm); padding: 10px 12px; }
+.dir-chat textarea { flex: 1; min-width: 0; }
+.dir-turn { font-size: 13.5px; padding: 6px 10px; border-radius: 10px; max-width: 85%; }
+.dir-turn.me { align-self: flex-end; background: var(--brand-soft); color: var(--brand-text); }
+.dir-turn.ai { align-self: flex-start; background: var(--surface); border: 1px solid var(--line); }
+.scope-targets { border-top: 1px solid var(--line); }
+.scope-targets > li:first-child { padding-top: 12px; border-top: none; }

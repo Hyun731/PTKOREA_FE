@@ -2,14 +2,71 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ROLE_LABEL, SECTION_LABEL, useProject } from "@/components/project-context";
-import { Dialog, ErrorBox, Field, Notice, PageIntro, ReasonButton, fmtDate, fmtDateTime } from "@/components/ui";
-import { api, type ItemResult, type Job, type ResearchItem, type ResearchPlan, type Usage } from "@/lib/api";
+import { ROLE_LABEL, useProject } from "@/components/project-context";
+import { Dialog, ErrorBox, Field, Notice, PageIntro, fmtDateTime } from "@/components/ui";
+import { api, type ItemResult, type Job, type ResearchItem, type ResearchPlan, type ScopeEntry, type ScopeSetting } from "@/lib/api";
 import { useAction, useApi, useJob } from "@/lib/hooks";
 
-// Rough upper bound per item, so the button can say what a run may cost before it starts.
-const EST_WEB_ITEM_USD = 0.3;
-const EST_PER_POST_USD = 0.004;
+const AUTOMATION: Record<string, [string, string]> = { auto: ["자동 수집", "b-ok"], manual: ["직접 입력", "b-outline"], generated: ["앞 항목으로 생성", "b-brand"] };
+
+// Items made before the 3C scope existed carry only their section.
+function legacyScope(i: ResearchItem): string {
+  if (i.section_id === "campaign") return i.role === "competitor" ? "3-7" : i.role === "benchmark" ? "3-9" : "2-8";
+  return { owned: "2-6", influencer: "2-7", search: "3-2", market: "3-1" }[i.section_id] ?? i.section_id;
+}
+
+function settingOf(e: ScopeEntry, enabled: boolean): ScopeSetting {
+  const custom = e.period === "custom";
+  return { item_id: e.item_id, enabled, period: e.period, months: e.months, start: custom ? e.start : null, end: custom ? e.end : null, channels: e.channels, targets: e.targets, max_items: e.max_items, focus: e.focus ?? null, keywords: e.keywords ?? [] };
+}
+
+type Turn = { who: "me" | "ai"; text: string };
+
+/** Ask for a change in words; the AI rewrites the item's period, channels, targets and focus. */
+function DirectionChat({ pid, entry, version, onChanged }: { pid: string; entry: ScopeEntry; version: number; onChanged: () => Promise<void> }) {
+  const [text, setText] = useState("");
+  const [turns, setTurns] = useState<Turn[]>([]);
+  const action = useAction();
+  const send = () => {
+    const message = text.trim();
+    if (!message) return;
+    void action.run(async () => {
+      setTurns((t) => [...t, { who: "me", text: message }]);
+      setText("");
+      const r = await api.post<{ reply: string }>(`/projects/${pid}/scope/${entry.item_id}/direction`, { base_version: version, message });
+      setTurns((t) => [...t, { who: "ai", text: r.reply || "조사 방향을 고쳤습니다." }]);
+      await onChanged();
+    });
+  };
+  return (
+    <div className="dir-chat">
+      {turns.map((t, k) => (
+        <div key={k} className={`dir-turn ${t.who}`}>
+          {t.text}
+        </div>
+      ))}
+      <ErrorBox error={action.error} />
+      <div className="row" style={{ gap: 8, alignItems: "flex-end" }}>
+        <textarea
+          rows={2}
+          aria-label="조사 방향 바꾸기 요청"
+          value={text}
+          placeholder="예: 기간은 최근 1년으로, 팝업·오프라인 행사 위주로 봐줘"
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+              e.preventDefault();
+              send();
+            }
+          }}
+        />
+        <button className="btn sm primary" disabled={action.busy || !text.trim()} onClick={send}>
+          {action.busy ? "고치는 중…" : "요청"}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function resultLine(r: ItemResult): string {
   const bits: string[] = [];
@@ -67,12 +124,11 @@ export default function ResearchPage() {
   const { project, meta, brandName, reload: reloadProject } = useProject();
   const pid = project?.id;
   const { data: plan, reload } = useApi<ResearchPlan>(pid ? `/projects/${pid}/research-plan` : null);
-  const { data: usage, reload: reloadUsage } = useApi<Usage>(pid ? `/projects/${pid}/usage` : null);
   const action = useAction();
-  const [selection, setSelection] = useState<Record<string, boolean>>({});
   const [jobId, setJobId] = useState<string | null>(null);
   const [runTotal, setRunTotal] = useState(0);
   const [editing, setEditing] = useState<ResearchItem | null>(null);
+  const [chatOpen, setChatOpen] = useState<Record<string, boolean>>({});
 
   // Reconnect to a run still going on the server (browser closed or reloaded).
   useEffect(() => {
@@ -102,125 +158,210 @@ export default function ResearchPage() {
   }, [anyBusy, reload]);
   const job = useJob(jobId, async () => {
     setJobId(null);
-    await Promise.all([reload(), reloadUsage(), reloadProject()]);
+    await Promise.all([reload(), reloadProject()]);
   });
 
-  const grouped = useMemo(() => {
+  const specOf = useMemo(() => Object.fromEntries((meta?.scope.items ?? []).map((sp) => [sp.id, sp])), [meta]);
+  const byScope = useMemo(() => {
     const g: Record<string, ResearchItem[]> = {};
-    for (const i of plan?.items ?? []) (g[i.section_id] ??= []).push(i);
+    for (const i of plan?.items ?? []) if (i.review_status !== "excluded") (g[i.scope_id ?? legacyScope(i)] ??= []).push(i);
     return g;
   }, [plan]);
 
-  if (!plan || !pid) return <p className="muted">불러오는 중…</p>;
-  const providers = meta?.providers ?? {};
-  const selected = (i: ResearchItem) => selection[i.id] ?? i.selected;
-  const dirty = Object.keys(selection).length > 0;
-  const running = Boolean(jobId && job && !["succeeded", "failed", "cancelled"].includes(job.state));
-  // Runs can overlap: only an item that is being researched right now is locked.
+  if (!plan || !pid || !project || !meta) return <p className="muted">불러오는 중…</p>;
+  const providers = meta.providers ?? {};
   const itemBusy = (i: ResearchItem) => ["queued", "running"].includes(i.execution_status);
-  const busyCount = plan.items.filter(itemBusy).length;
-  const canAuto = (i: ResearchItem) => Boolean(i.section_id === "campaign" || i.section_id === "market" ? providers.perplexity : i.section_id === "influencer" ? providers.scrapecreators : false);
+  const has = (i: ResearchItem, ...ids: string[]) => i.channels.some((c) => ids.includes(c.id));
+  const canAuto = (i: ResearchItem) =>
+    Boolean(i.section_id === "campaign" || i.section_id === "market" ? providers.perplexity && has(i, "web") : i.section_id === "influencer" ? providers.scrapecreators && has(i, "instagram", "youtube") : false);
   const urlsOf = (i: ResearchItem) => i.inputs?.post_urls ?? [];
   const tagsOf = (i: ResearchItem) => i.inputs?.hashtags ?? [];
   // An influencer item can run with chosen post URLs, hashtags to discover posts with, or both.
   const hasInput = (i: ResearchItem) => urlsOf(i).length > 0 || tagsOf(i).length > 0;
   const ran = (i: ResearchItem) => ["succeeded", "partial", "needs_review"].includes(i.execution_status);
-  const ready = (i: ResearchItem) => selected(i) && i.review_status !== "excluded" && canAuto(i) && !ran(i) && !itemBusy(i) && (i.section_id !== "influencer" || hasInput(i));
+  const ready = (i: ResearchItem) => i.selected && i.review_status !== "excluded" && canAuto(i) && !ran(i) && !itemBusy(i) && (i.section_id !== "influencer" || hasInput(i));
 
-  const active = plan.items.filter((i) => selected(i) && i.review_status !== "excluded");
+  const active = plan.items.filter((i) => i.selected && i.review_status !== "excluded");
+  const excluded = plan.items.filter((i) => i.review_status === "excluded");
   const toRun = active.filter(ready);
-  const needUrls = active.filter((i) => i.section_id === "influencer" && !hasInput(i));
-  const reviewed = plan.items.filter((i) => i.review_status !== "pending").length;
-  const estimate = toRun.reduce((s, i) => s + (i.section_id === "influencer" ? (urlsOf(i).length + 20 * Math.min(1, tagsOf(i).length)) * EST_PER_POST_USD + tagsOf(i).length * 60 * 0.0023 : EST_WEB_ITEM_USD), 0);
-  const step1 = Boolean(plan.confirmed_at) && !dirty;
+  const busyCount = plan.items.filter(itemBusy).length;
+  const waiting = active.filter((i) => i.review_status === "pending" || i.review_status === "stale");
+  const step1 = Boolean(plan.confirmed_at);
   const step2 = step1 && toRun.length === 0 && busyCount === 0;
-  const step3 = reviewed === plan.items.length && plan.items.length > 0;
+  const step3 = active.length > 0 && waiting.length === 0;
   const current = !step1 ? 1 : !step2 ? 2 : !step3 ? 3 : 0;
+  const running = Boolean(jobId && job && !["succeeded", "failed", "cancelled"].includes(job.state));
 
   const refresh = async () => {
     await Promise.all([reload(), reloadProject()]);
   };
-  const saveSelection = async () => {
-    await api.put(`/projects/${pid}/research-plan`, { base_version: plan.version, items: Object.entries(selection).map(([id, sel]) => ({ id, selected: sel })), confirm: true });
-    setSelection({});
+  const confirmPlan = async () => {
+    if (!plan.confirmed_at) await api.put(`/projects/${pid}/research-plan`, { base_version: plan.version, items: [], confirm: true });
   };
-  const confirm = () =>
-    action.run(async () => {
-      await saveSelection();
-      await refresh();
-    }, "조사할 항목을 정했습니다. 이제 자료를 모으세요");
   const run = (ids: string[], force = false) =>
     action.run(async () => {
-      if (!step1) await saveSelection(); // starting a run also fixes the selection
+      await confirmPlan(); // starting a run also okays the plan
+      if (ids.length === 0) return refresh();
       setRunTotal(ids.length);
       const r = await api.post<{ job: Job }>(`/projects/${pid}/research-runs`, { item_ids: ids, force });
       setJobId(r.job.id);
       await refresh();
-    }, "자동 조사를 시작했습니다. 화면을 닫아도 서버에서 계속됩니다");
-  const review = (item: ResearchItem, review_status: string, omission_reason?: string, msg?: string) =>
+    }, ids.length ? "조사를 시작했습니다. 화면을 닫아도 서버에서 계속됩니다" : "이 방향으로 진행합니다");
+  const review = (item: ResearchItem, review_status: string, msg?: string) =>
     action.run(async () => {
-      await api.patch(`/research-items/${item.id}/review`, { review_status, omission_reason });
+      await api.patch(`/research-items/${item.id}/review`, { review_status });
       await refresh();
     }, msg);
+  const acceptAll = () =>
+    action.run(async () => {
+      const r = await api.post<{ accepted: number }>(`/projects/${pid}/research-plan/accept-all`, {});
+      await refresh();
+      return r;
+    }, "남은 항목을 모두 확인 완료로 표시했습니다");
+  const toggleScope = (e: ScopeEntry, on: boolean) =>
+    action.run(async () => {
+      const others = (project.config.scope ?? []).filter((s) => s.item_id !== e.item_id);
+      await api.patch(`/projects/${pid}`, { base_version: project.version, changes: { scope: [...others, settingOf(e, on)] } });
+      await refresh();
+    }, on ? `‘${specOf[e.item_id]?.title}’ 항목을 더했습니다` : `‘${specOf[e.item_id]?.title}’ 항목을 뺐습니다`);
 
   const steps = [
     {
       n: 1,
-      title: "조사할 항목 고르기",
+      title: "조사 방향 확인",
       done: step1,
-      body: "필요 없는 항목만 체크를 해제하세요.",
-      action: (
-        <button className={`btn sm ${current === 1 ? "primary" : ""}`} onClick={confirm} disabled={action.busy}>
-          {dirty ? "선택 저장" : step1 ? "다시 저장" : "이 항목들로 진행"}
-        </button>
-      ),
+      body: "항목마다 무엇을, 언제, 어디서 조사할지 적혀 있습니다. 다르면 ‘방향 바꾸기’로 말해 주세요.",
+      action: null,
     },
     {
       n: 2,
       title: "자료 모으기",
       done: step2,
-      body:
-        toRun.length > 0
-          ? `자동 조사할 항목 ${toRun.length}개 · 예상 비용 최대 약 $${estimate.toFixed(2)} (이미 받은 응답은 다시 과금하지 않음)`
-          : needUrls.length > 0
-            ? "인플루언서 항목은 게시물 URL을 먼저 넣어야 합니다."
-            : "자동 조사를 모두 돌렸습니다.",
+      body: toRun.length > 0 ? `자동으로 조사할 대상 ${toRun.length}개` : busyCount > 0 ? "조사 중입니다" : step1 ? "자동 조사를 모두 돌렸습니다" : "방향이 맞으면 조사를 시작하세요",
       action: (
-        <button className={`btn sm ${current === 2 ? "primary" : ""}`} disabled={action.busy || toRun.length === 0} onClick={() => run(toRun.map((i) => i.id))}>
-          {toRun.length === 0 && busyCount > 0 ? "조사 중…" : `자동 조사 시작 (${toRun.length})`}
+        <button className={`btn sm ${current <= 2 ? "primary" : ""}`} disabled={action.busy || (toRun.length === 0 && step1)} onClick={() => run(toRun.map((i) => i.id))}>
+          {toRun.length === 0 && busyCount > 0 ? "조사 중…" : toRun.length > 0 ? `이 방향으로 조사 시작 (${toRun.length})` : "이 방향으로 진행"}
         </button>
       ),
     },
     {
       n: 3,
-      title: "모인 자료 확인하기",
+      title: "결과 확인",
       done: step3,
-      body: `결과를 보고 ‘확인 완료’ 또는 ‘제외’를 누르세요 (${reviewed}/${plan.items.length})`,
+      body: waiting.length > 0 ? `확인을 기다리는 대상 ${waiting.length}개` : "모두 확인했습니다",
       action: (
-        <Link className={`btn sm ${current === 3 || current === 0 ? "primary" : ""}`} href={`/projects/${pid}/materials`}>
-          자료 보러 가기 →
-        </Link>
+        <button className={`btn sm ${current === 3 ? "primary" : ""}`} disabled={action.busy || waiting.length === 0 || busyCount > 0} onClick={acceptAll}>
+          모두 확인 완료
+        </button>
       ),
     },
   ];
 
+  const itemRow = (i: ResearchItem) => {
+    const r = i.last_result ?? {};
+    const urls = urlsOf(i);
+    const isRunning = itemBusy(i);
+    const manual = !canAuto(i) && !["influencer", "search"].includes(i.section_id);
+    let next: React.ReactNode = null;
+    if (!isRunning) {
+      if (i.section_id === "influencer" && !hasInput(i))
+        next = (
+          <button className="btn sm primary" onClick={() => setEditing(i)}>
+            게시물 URL·해시태그 넣기
+          </button>
+        );
+      else if (i.section_id === "search")
+        next = (
+          <Link className="btn sm" href={`/projects/${pid}/materials`}>
+            CSV 올리기
+          </Link>
+        );
+      else if (ready(i))
+        next = (
+          <button className="btn sm" disabled={action.busy} onClick={() => run([i.id])}>
+            자동 조사
+          </button>
+        );
+      else if (manual && i.review_status === "pending")
+        next = (
+          <Link className="btn sm" href={`/projects/${pid}/materials?item=${i.id}`}>
+            자료 직접 작성
+          </Link>
+        );
+      else if (i.review_status === "pending" || i.review_status === "stale")
+        next = (
+          <button className="btn sm ok" onClick={() => review(i, "accepted", `${i.entity} 확인 완료`)}>
+            확인 완료
+          </button>
+        );
+    }
+    return (
+      <li key={i.id}>
+        <div className="grow">
+          <div className="row wrap" style={{ gap: 8 }}>
+            <span className="title">{i.entity}</span>
+            <span className="badge b-outline">{ROLE_LABEL[i.role]}</span>
+            {project.config.brands.length > 1 && <span className="small muted">{brandName(i.brand_id)} 보고서</span>}
+            {i.review_status === "accepted" && <span className="badge b-ok">확인 완료</span>}
+            {isRunning && <span className="badge b-brand">조사 중</span>}
+          </div>
+          {r.status && (
+            <div className="meta">
+              {fmtDateTime(r.at)} — {resultLine(r) || "결과 없음"}
+              {i.section_id === "influencer" && urls.length > 0 && ` · URL ${urls.length}개`}
+            </div>
+          )}
+          {(r.errors ?? []).map((e, k) => (
+            <div key={k} className="small" style={{ color: e.code === "NOT_IN_STAGE" || e.code === "NEEDS_INPUT" ? "var(--text-2)" : "var(--bad)", fontWeight: 600 }}>
+              {e.message}
+            </div>
+          ))}
+        </div>
+        <div className="actions">
+          {next}
+          <details className="menu">
+            <summary className="btn sm ghost">다른 작업</summary>
+            <div className="menu-pop">
+              <Link className="btn sm ghost" href={`/projects/${pid}/materials?item=${i.id}`}>
+                자료 직접 작성
+              </Link>
+              {i.section_id === "influencer" && urls.length > 0 && (
+                <button className="btn sm ghost" onClick={() => setEditing(i)}>
+                  게시물 URL·해시태그 수정
+                </button>
+              )}
+              {i.section_id !== "search" && ran(i) && (
+                <button className="btn sm ghost" disabled={action.busy || isRunning || !canAuto(i)} onClick={() => run([i.id], true)}>
+                  다시 조사
+                </button>
+              )}
+              {i.review_status === "accepted" && (
+                <button className="btn sm ghost" onClick={() => review(i, "pending", "확인 완료를 취소했습니다")}>
+                  확인 완료 취소
+                </button>
+              )}
+              <button className="btn sm ghost danger" onClick={() => review(i, "excluded", `${i.entity}을(를) 제외했습니다 · ‘제외된 항목’에서 되돌릴 수 있습니다`)}>
+                제외
+              </button>
+            </div>
+          </details>
+        </div>
+      </li>
+    );
+  };
+
   return (
     <div className="stack-lg">
-      <PageIntro step="2단계" title="조사 계획">항목별로 자료를 모읍니다. 채택해야 장표에 쓰입니다.</PageIntro>
+      <PageIntro step="2단계" title="조사 계획">
+        자사 → 경쟁사 → 소비자 순서로 무엇을 조사할지 보여 줍니다. 방향이 맞으면 조사를 시작하세요.
+      </PageIntro>
 
       <section className="card" aria-labelledby="todo-title">
         <div className="card-head">
           <div className="grow">
             <h3 id="todo-title">이 단계에서 할 일</h3>
-            <p>{current === 0 ? "모두 끝났습니다. 다음은 3단계 자료 수집에서 카드별로 채택합니다." : `지금 할 일: ${current}. ${steps[current - 1].title}`}</p>
+            <p>{current === 0 ? "모두 끝났습니다. 다음 단계에서 모인 자료를 확인합니다." : `지금 할 일: ${current}. ${steps[current - 1].title}`}</p>
           </div>
-          {usage && (
-            <div className="small muted num" style={{ textAlign: "right" }}>
-              누적 사용 <strong>${usage.total_cost_usd.toFixed(3)}</strong>
-              <br />
-              실행 1회 한도 ${usage.budget_per_run_usd.toFixed(0)}
-            </div>
-          )}
         </div>
         <ol className="todo-steps">
           {steps.map((s) => (
@@ -245,139 +386,122 @@ export default function ResearchPage() {
               <div style={{ width: `${Math.max(5, job.progress)}%` }} />
             </div>
             <p className="small muted" role="status">
-              {runTotal > 0 ? (
-                <>
-                  항목 {Math.min(runTotal, Math.round((job.progress / 100) * runTotal))}/{runTotal}개 처리 완료 ({job.progress}%)
-                </>
-              ) : (
-                <>자동 조사 진행 중 {job.progress}%</>
-              )}{" "}
-              {busyCount > 1 && ` · 동시에 조사 중인 항목 ${busyCount}개`} · 서버에서 진행되므로 다른 화면으로 가도 됩니다
+              {runTotal > 0 ? `대상 ${Math.min(runTotal, Math.round((job.progress / 100) * runTotal))}/${runTotal}개 처리 완료` : `조사 진행 중 ${job.progress}%`} · 서버에서 진행되므로 다른 화면으로 가도 됩니다
             </p>
           </div>
         )}
         <ErrorBox error={action.error} />
-        <p className="small muted mt8">
-          연결 상태: 기사·사례 검색 {providers.perplexity ? "✓" : "키 없음"} · 게시물 지표 {providers.scrapecreators ? "✓" : "키 없음"} · AI 후보 추출 {providers.anthropic ? "✓" : "키 없음"}
-        </p>
       </section>
 
-      {Object.entries(grouped).map(([section, items]) => (
-        <section key={section} className="card" aria-labelledby={`sec-${section}`}>
-          <div className="card-head">
-            <div className="grow">
-              <h3 id={`sec-${section}`}>{SECTION_LABEL[section] ?? section}</h3>
-              <p>
-                {fmtDate(items[0].period_start)} ~ {fmtDate(items[0].period_end)} · {items.length}개 항목
-              </p>
+      {meta.scope.parts.map((part) => {
+        const entries = plan.scope.filter((e) => specOf[e.item_id]?.part === part.id);
+        const on = entries.filter((e) => e.enabled);
+        const off = entries.filter((e) => !e.enabled);
+        return (
+          <section key={part.id} className="card" aria-labelledby={`part-${part.id}`}>
+            <div className="card-head">
+              <span className="scope-no" aria-hidden>
+                {part.no}
+              </span>
+              <div className="grow">
+                <h3 id={`part-${part.id}`}>
+                  {part.label} <span className="faint small">{part.en}</span>
+                </h3>
+                <p>{part.question}</p>
+              </div>
             </div>
-          </div>
-          <ul className="list">
-            {items.map((i) => {
-              const inc = selected(i);
-              const r = i.last_result ?? {};
-              const urls = urlsOf(i);
-              const isRunning = ["queued", "running"].includes(i.execution_status);
-              // One obvious next action per item; everything else sits under "다른 작업".
-              let next: React.ReactNode = null;
-              if (inc && i.review_status !== "excluded" && !isRunning) {
-                if (section === "influencer" && !hasInput(i))
-                  next = (
-                    <button className="btn sm primary" onClick={() => setEditing(i)}>
-                      게시물 URL·해시태그 넣기
-                    </button>
-                  );
-                else if (section === "search")
-                  next = (
-                    <Link className="btn sm" href={`/projects/${pid}/materials`}>
-                      CSV 올리기
-                    </Link>
-                  );
-                else if (ready(i))
-                  next = (
-                    <button className="btn sm primary" disabled={action.busy || itemBusy(i)} onClick={() => run([i.id])}>
-                      자동 조사
-                    </button>
-                  );
-                else if (i.review_status === "pending")
-                  next = (
-                    <button className="btn sm ok" onClick={() => review(i, "accepted", undefined, `${i.entity} 항목을 확인 완료로 표시했습니다`)}>
-                      확인 완료
-                    </button>
-                  );
-              }
-              return (
-                <li key={i.id} className={inc && i.review_status !== "excluded" ? "" : "dim"}>
-                  <input
-                    type="checkbox"
-                    style={{ marginTop: 3 }}
-                    aria-label={`${i.entity} 이번 조사에 포함`}
-                    checked={inc}
-                    onChange={(e) => setSelection({ ...selection, [i.id]: e.target.checked })}
-                  />
-                  <div className="grow">
+            {on.length === 0 && <p className="small muted">조사할 항목이 없습니다. 아래에서 더할 수 있습니다.</p>}
+            <div className="scope-list">
+              {on.map((e) => {
+                const spec = specOf[e.item_id];
+                const items = byScope[e.item_id] ?? [];
+                const [label, cls] = AUTOMATION[e.automation];
+                return (
+                  <article key={e.item_id} className="scope-item" aria-labelledby={`si-${e.item_id}`}>
                     <div className="row wrap" style={{ gap: 8 }}>
-                      <span className="title">{i.entity}</span>
-                      <span className="badge b-outline">{ROLE_LABEL[i.role]}</span>
-                      {i.required && <span className="badge b-neutral">필수</span>}
+                      <span className="scope-id num">{e.item_id}</span>
+                      <h4 id={`si-${e.item_id}`} className="grow">
+                        {spec.title}
+                      </h4>
+                      <span className={`badge ${cls}`}>{label}</span>
                     </div>
-                    <div className="meta">
-                      {i.question} · {brandName(i.brand_id)} 보고서
-                      {section === "influencer" && urls.length > 0 && ` · URL ${urls.length}개`}
+                    <ul className="direction">
+                      {e.direction.map((line, k) => (
+                        <li key={k}>{line}</li>
+                      ))}
+                    </ul>
+                    <div className="row wrap" style={{ gap: 8 }}>
+                      <button className="btn sm ghost" aria-expanded={Boolean(chatOpen[e.item_id])} onClick={() => setChatOpen((m) => ({ ...m, [e.item_id]: !m[e.item_id] }))}>
+                        방향 바꾸기
+                      </button>
+                      <button className="btn sm ghost" disabled={action.busy} onClick={() => toggleScope(e, false)}>
+                        이 항목 빼기
+                      </button>
                     </div>
-                    {r.status && (
-                      <div className="meta">
-                        마지막 실행 {fmtDateTime(r.at)} — {resultLine(r) || "결과 없음"}
+                    {chatOpen[e.item_id] && <DirectionChat pid={pid} entry={e} version={project.version} onChanged={refresh} />}
+                    {items.length > 0 && <ul className="list scope-targets">{items.map(itemRow)}</ul>}
+                  </article>
+                );
+              })}
+            </div>
+            {off.length > 0 && (
+              <details className="more">
+                <summary>더 조사할 항목 ({off.length})</summary>
+                <ul className="list mt8">
+                  {off.map((e) => (
+                    <li key={e.item_id}>
+                      <span className="scope-id num">{e.item_id}</span>
+                      <div className="grow">
+                        <div className="title">{specOf[e.item_id].title}</div>
+                        <div className="meta">{e.direction[0]}</div>
                       </div>
-                    )}
-                    {(r.errors ?? []).map((e, k) => (
-                      <div key={k} className="small" style={{ color: e.code === "NOT_IN_STAGE" || e.code === "NEEDS_INPUT" ? "var(--text-2)" : "var(--bad)", fontWeight: 600 }}>
-                        {e.message}
-                      </div>
-                    ))}
+                      <button className="btn sm" disabled={action.busy} onClick={() => toggleScope(e, true)}>
+                        더하기
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
+          </section>
+        );
+      })}
+
+      {excluded.length > 0 && (
+        <section className="card" aria-labelledby="excluded-title">
+          <details>
+            <summary id="excluded-title" className="title">
+              제외된 항목 보기 ({excluded.length})
+            </summary>
+            <ul className="list mt8">
+              {excluded.map((i) => (
+                <li key={i.id} className="dim">
+                  <div className="grow">
+                    <div className="title">
+                      {specOf[i.scope_id ?? legacyScope(i)]?.title ?? i.question} · {i.entity}
+                    </div>
+                    <div className="meta">{i.omission_reason}</div>
                   </div>
-                  <div className="actions">
-                    {next}
-                    <details className="menu">
-                      <summary className="btn sm ghost">다른 작업</summary>
-                      <div className="menu-pop">
-                        <Link className="btn sm ghost" href={`/projects/${pid}/materials?item=${i.id}`}>
-                          자료 직접 작성
-                        </Link>
-                        {section === "influencer" && urls.length > 0 && (
-                          <button className="btn sm ghost" onClick={() => setEditing(i)}>
-                            게시물 URL·해시태그 수정
-                          </button>
-                        )}
-                        {section !== "search" && ran(i) && (
-                          <button className="btn sm ghost" disabled={action.busy || itemBusy(i) || !canAuto(i)} onClick={() => run([i.id], true)} title="이미 받은 응답은 캐시에서 재사용해 다시 과금하지 않습니다">
-                            다시 조사
-                          </button>
-                        )}
-                        {i.review_status === "pending" ? (
-                          <>
-                            {next === null || section === "search" || section === "influencer" ? (
-                              <button className="btn sm ghost" onClick={() => review(i, "accepted", undefined, `${i.entity} 항목을 확인 완료로 표시했습니다`)}>
-                                확인 완료로 표시
-                              </button>
-                            ) : null}
-                            <ReasonButton label="이 항목 제외" title={`‘${i.entity}’ 항목 제외`} danger onSubmit={(rr) => review(i, "excluded", rr, "항목을 제외했습니다").then(() => undefined)} />
-                          </>
-                        ) : (
-                          <button className="btn sm ghost" onClick={() => review(i, "pending", undefined, "검토 전으로 되돌렸습니다")}>
-                            {i.review_status === "excluded" ? "제외 취소" : "확인 완료 취소"}
-                          </button>
-                        )}
-                      </div>
-                    </details>
-                  </div>
+                  <button className="btn sm" onClick={() => review(i, "pending", "되돌렸습니다")}>
+                    되돌리기
+                  </button>
                 </li>
-              );
-            })}
-          </ul>
+              ))}
+            </ul>
+          </details>
         </section>
-      ))}
+      )}
+
       {!providers.perplexity && !providers.scrapecreators && <Notice tone="warn">자동 수집 키가 없어 직접 작성과 CSV로만 진행할 수 있습니다.</Notice>}
+
+      <div className="sticky-foot">
+        <div className="row wrap">
+          <span className="grow small muted">{step3 ? "조사 결과를 모두 확인했습니다." : "확인이 남아 있어도 다음 단계로 갈 수 있습니다."}</span>
+          <Link href={`/projects/${pid}/materials`} className={`btn ${step3 ? "primary" : ""}`}>
+            다음 단계: 자료 확인 →
+          </Link>
+        </div>
+      </div>
       {editing && <UrlEditor item={editing} onClose={() => setEditing(null)} onSaved={() => void reload()} />}
     </div>
   );
