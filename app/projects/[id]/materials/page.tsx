@@ -303,7 +303,7 @@ function MaterialsInner() {
         changed();
         return r;
       },
-      (r) => (r.left ? `${r.accepted}개를 채택했습니다 · 확인이 필요한 ${r.left}개는 남겨 두었습니다` : `${r.accepted}개를 모두 채택했습니다`),
+      (r) => (r.left ? `${r.accepted}개를 채택했습니다 · 관련성·기간·원문 확인이 필요한 ${r.left}개는 남겨 두었습니다` : `${r.accepted}개를 모두 채택했습니다`),
     );
   const closeAdd = () => {
     setAdding(false);
@@ -326,7 +326,7 @@ function MaterialsInner() {
           </button>
         }
       >
-        모인 자료는 기본으로 장표에 들어갑니다. 자사 → 경쟁사 → 소비자 순서로 훑어보고, 맞지 않는 자료만 빼세요.
+        모인 자료를 자사 → 경쟁사 → 소비자 순서로 묶었습니다. 카드를 열어 요약을 읽고 채택하거나 빼세요. 다 봤다면 남은 자료를 한 번에 채택할 수 있습니다.
       </PageIntro>
 
       <section className="card" aria-labelledby="box-title">
@@ -334,8 +334,7 @@ function MaterialsInner() {
           <div className="grow">
             <h2 id="box-title">모인 자료</h2>
             <p className="num">
-              장표에 들어감 {accepted}
-              {waiting > 0 && ` · 확인이 필요한 자료 ${waiting}`}
+              확인 전 {waiting} · 채택 {accepted}
               {grouped > 0 && ` · 같은 사례로 묶인 추가 출처 ${grouped}`}
             </p>
           </div>
@@ -415,7 +414,7 @@ function MaterialsInner() {
 
       <div className="sticky-foot">
         <div className="row wrap">
-          <span className="grow small muted">{waiting > 0 ? `확인이 필요한 자료 ${waiting}개는 아직 장표에 들어가지 않았습니다.` : "모든 자료가 장표에 들어갑니다. 맞지 않는 자료만 빼면 됩니다."}</span>
+          <span className="grow small muted">{waiting > 0 ? `확인 전 자료 ${waiting}개 — 채택한 자료만 장표에 쓰입니다.` : "모든 자료를 확인했습니다."}</span>
           <Link href={`/projects/${pid}/review`} className={`btn ${waiting === 0 ? "primary" : ""}`}>
             다음 단계: 검토·시사점 →
           </Link>
