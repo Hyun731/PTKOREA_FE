@@ -8,7 +8,7 @@ import { ImpactPanel, ImpactZone } from "@/components/impact";
 import { MaterialStudio } from "@/components/material-studio";
 import { useProject } from "@/components/project-context";
 import { Dialog, ErrorBox, Field, FileButton, PageIntro, Status, fmtDate } from "@/components/ui";
-import { api, type Batch, type Material, type ProjectConfig, type ResearchPlan } from "@/lib/api";
+import { api, fileUrl, type Batch, type Material, type ProjectConfig, type ResearchPlan } from "@/lib/api";
 import { useAction, useApi } from "@/lib/hooks";
 
 function CsvSection({ pid, onChanged }: { pid: string; onChanged: () => void }) {
@@ -26,19 +26,24 @@ function CsvSection({ pid, onChanged }: { pid: string; onChanged: () => void }) 
       fd.append("file", file);
       await api.post(`/projects/${pid}/imports`, fd);
       await after();
-    }, "CSV를 올렸습니다. 검토·시사점 탭에서 채택하세요");
+    }, "CSV를 올렸습니다. 확인한 뒤 채택하세요");
   const sample = (posts: string) =>
     action.run(async () => {
       await api.post(`/projects/${pid}/imports/sample?posts=${posts}`);
       await after();
     }, "합성 샘플 CSV를 불러왔습니다");
   const visible = (batches ?? []).filter((b) => b.status !== "replaced");
+  const review = (b: Batch, act: "accept" | "reject") =>
+    action.run(async () => {
+      await api.post(`/imports/${b.id}/review`, act === "accept" ? { action: "accept" } : { action: "reject", reason: "자료 확인에서 뺌" });
+      await after();
+    }, act === "accept" ? `${b.filename} 배치를 채택했습니다` : "배치를 뺐습니다");
   return (
     <section className="card" aria-labelledby="csv-title">
       <div className="card-head">
         <div className="grow">
           <h2 id="csv-title">정량 데이터 (CSV)</h2>
-          <p>올린 뒤 검토·시사점 탭에서 ‘채택’해야 계산에 쓰입니다.</p>
+          <p>올린 배치는 확인한 뒤 ‘채택’해야 계산에 쓰입니다.</p>
         </div>
       </div>
       <div className="row wrap">
@@ -71,13 +76,26 @@ function CsvSection({ pid, onChanged }: { pid: string; onChanged: () => void }) 
                 </div>
                 <div className="meta num">
                   유효 {b.valid_rows}/{b.total_rows}행{b.errors.length ? ` · 오류 ${b.errors.length}행` : ""} · {fmtDate(b.created_at)}
+                  {b.errors.length > 0 && (
+                    <>
+                      {" · "}
+                      <a href={fileUrl(`/imports/${b.id}/errors.csv`)}>오류 행 내려받기</a>
+                    </>
+                  )}
                 </div>
               </div>
-              {b.status === "candidate" && (
-                <Link href={`/projects/${pid}/review`} className="btn sm">
-                  채택하러 가기
-                </Link>
-              )}
+              <div className="actions">
+                {b.status !== "accepted" && (
+                  <button className="btn sm primary" disabled={action.busy} onClick={() => review(b, "accept")}>
+                    배치 채택
+                  </button>
+                )}
+                {b.status !== "rejected" && (
+                  <button className="btn sm ghost" disabled={action.busy} onClick={() => review(b, "reject")}>
+                    빼기
+                  </button>
+                )}
+              </div>
             </li>
           ))}
         </ul>
@@ -415,8 +433,8 @@ function MaterialsInner() {
       <div className="sticky-foot">
         <div className="row wrap">
           <span className="grow small muted">{waiting > 0 ? `확인 전 자료 ${waiting}개 — 채택한 자료만 장표에 쓰입니다.` : "모든 자료를 확인했습니다."}</span>
-          <Link href={`/projects/${pid}/review`} className={`btn ${waiting === 0 ? "primary" : ""}`}>
-            다음 단계: 검토·시사점 →
+          <Link href={`/projects/${pid}/draft`} className={`btn ${waiting === 0 ? "primary" : ""}`}>
+            다음 단계: 초안 흐름 →
           </Link>
         </div>
       </div>
