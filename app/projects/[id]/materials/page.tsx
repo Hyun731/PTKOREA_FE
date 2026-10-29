@@ -234,7 +234,8 @@ function MaterialGrid({ cards, brandName, onOpen }: { cards: Material[]; brandNa
                 </div>
                 {m.duplicates.length > 0 && <div className="meta">같은 사례 출처 {m.duplicates.length}곳 더 · {m.duplicates.map((d) => d.publisher).filter(Boolean).slice(0, 2).join(", ")}</div>}
                 {m.comment && <div className="meta">“{m.comment}”</div>}
-                {m.readiness.length > 0 && <div className="need">남은 일: {m.readiness.join(", ")}</div>}
+                {m.review_status === "candidate" && m.review_reason && <div className="need">확인 필요: {m.review_reason}</div>}
+                {m.review_status === "accepted" && m.readiness.length > 0 && <div className="need">남은 일: {m.readiness.join(", ")}</div>}
               </div>
             </button>
           </li>
@@ -295,6 +296,15 @@ function MaterialsInner() {
           ? `조사 기간 밖 자료 ${r.excluded.length}개를 제외했습니다${r.flagged ? ` · 기간 확인이 필요한 자료 ${r.flagged}개` : ""}`
           : "모든 자동 수집 자료가 조사 기간 안에 있습니다",
     );
+  const acceptAll = () =>
+    dedupe.run(
+      async () => {
+        const r = await api.post<{ accepted: number; left: number }>(`/projects/${pid}/materials/accept-all`);
+        changed();
+        return r;
+      },
+      (r) => (r.left ? `${r.accepted}개를 채택했습니다 · 확인이 필요한 ${r.left}개는 남겨 두었습니다` : `${r.accepted}개를 모두 채택했습니다`),
+    );
   const closeAdd = () => {
     setAdding(false);
     if (itemId) router.replace(`/projects/${pid}/materials`);
@@ -316,7 +326,7 @@ function MaterialsInner() {
           </button>
         }
       >
-        모인 자료를 자사 → 경쟁사 → 소비자 순서로 묶었습니다. 카드를 열어 요약을 읽고, 장표에 쓸 문장을 고른 뒤 채택하세요.
+        모인 자료는 기본으로 장표에 들어갑니다. 자사 → 경쟁사 → 소비자 순서로 훑어보고, 맞지 않는 자료만 빼세요.
       </PageIntro>
 
       <section className="card" aria-labelledby="box-title">
@@ -324,10 +334,16 @@ function MaterialsInner() {
           <div className="grow">
             <h2 id="box-title">모인 자료</h2>
             <p className="num">
-              확인 전 {waiting} · 채택 {accepted}
+              장표에 들어감 {accepted}
+              {waiting > 0 && ` · 확인이 필요한 자료 ${waiting}`}
               {grouped > 0 && ` · 같은 사례로 묶인 추가 출처 ${grouped}`}
             </p>
           </div>
+          {waiting > 0 && (
+            <button className="btn primary" disabled={dedupe.busy} onClick={acceptAll}>
+              남은 자료 모두 채택 ({waiting})
+            </button>
+          )}
         </div>
         <ErrorBox error={dedupe.error} />
         {materials && live.length === 0 && (
@@ -399,7 +415,7 @@ function MaterialsInner() {
 
       <div className="sticky-foot">
         <div className="row wrap">
-          <span className="grow small muted">{waiting > 0 ? `확인 전 자료 ${waiting}개 — 채택하지 않은 자료는 장표에 쓰이지 않습니다.` : "모든 자료를 확인했습니다."}</span>
+          <span className="grow small muted">{waiting > 0 ? `확인이 필요한 자료 ${waiting}개는 아직 장표에 들어가지 않았습니다.` : "모든 자료가 장표에 들어갑니다. 맞지 않는 자료만 빼면 됩니다."}</span>
           <Link href={`/projects/${pid}/review`} className={`btn ${waiting === 0 ? "primary" : ""}`}>
             다음 단계: 검토·시사점 →
           </Link>
