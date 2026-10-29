@@ -95,7 +95,7 @@ function derive(id: string, p: ProjectOut | null, plan: SlidePlanOut | null, dec
 
   if (!c.plan_confirmed) next.push({ text: "조사 계획을 확인하고 확정하세요", href: `${base}/research`, tab: "조사 계획" });
   if (c.materials + c.batches === 0)
-    next.push({ text: "정량 CSV를 올리거나 자료 카드를 추가하세요", href: `${base}/materials`, tab: "자료 수집" });
+    next.push({ text: "정량 CSV를 올리거나 자료 카드를 추가하세요", href: `${base}/materials`, tab: "자료 확인" });
   if (c.batches_pending) next.push({ text: `CSV 배치 ${c.batches_pending}개를 채택하거나 제외하세요`, href: `${base}/review`, tab: "검토·시사점" });
   if (c.claims_stale) next.push({ text: `근거가 바뀐 문장 ${c.claims_stale}개를 다시 검토하세요`, href: `${base}/review`, tab: "검토·시사점" });
   if (c.facts_pending) next.push({ text: `수치 ${c.facts_pending}개를 원문과 대조하세요`, href: `${base}/review`, tab: "검토·시사점" });
@@ -119,7 +119,7 @@ function derive(id: string, p: ProjectOut | null, plan: SlidePlanOut | null, dec
 export const STEPS: { slug: string; label: string; desc: string }[] = [
   { slug: "setup", label: "프로젝트 설정", desc: "브랜드·경쟁사·기간" },
   { slug: "research", label: "조사 계획", desc: "모을 자료 항목 정하기" },
-  { slug: "materials", label: "자료 수집", desc: "CSV·카드로 근거 모으기" },
+  { slug: "materials", label: "자료 확인", desc: "요약 읽고 문장 골라 채택" },
   { slug: "review", label: "검토·시사점", desc: "사람이 채택·수정" },
   { slug: "output", label: "팩트북 출력", desc: "PPTX·원장 내보내기" },
 ];
