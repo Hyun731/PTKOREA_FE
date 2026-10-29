@@ -394,3 +394,25 @@ table.table input, table.table select { min-height: 38px; }
 .dir-turn.ai { align-self: flex-start; background: var(--surface); border: 1px solid var(--line); }
 .scope-targets { border-top: 1px solid var(--line); }
 .scope-targets > li:first-child { padding-top: 12px; border-top: none; }
+
+/* 3단계 자료 카드: 왼쪽은 이해, 오른쪽은 문장과 채택 */
+.studio { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+.studio-pane { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.studio-pane h4 { margin: 0 0 6px; font-size: 14.5px; }
+.studio-image { height: 260px; border-radius: var(--radius-sm); background: var(--surface-3); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.studio-summary { margin: 0; font-size: 14.5px; line-height: 1.65; background: var(--brand-soft); color: var(--text); border-radius: var(--radius-sm); padding: 10px 12px; }
+.studio-chat { display: flex; flex-direction: column; gap: 8px; }
+.studio-chat textarea, .studio-pane textarea { flex: 1; min-width: 0; width: 100%; }
+.studio-claims { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.studio-claims > li { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius-sm); font-size: 14px; }
+.studio-claims > li.on { border-color: var(--ok); background: var(--ok-soft); }
+.studio-ideas { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.studio-ideas .idea { all: unset; cursor: pointer; padding: 8px 10px; border: 1px dashed var(--brand); border-radius: var(--radius-sm); font-size: 14px; }
+.studio-ideas .idea:hover { background: var(--brand-soft); }
+.studio-ideas .idea:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.mgroup-head { display: flex; gap: 8px; align-items: center; margin-top: 18px; }
+.mcard .summary { font-size: 13px; color: var(--text-2); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+@media (max-width: 860px) {
+  .studio { grid-template-columns: 1fr; }
+  .studio-image { height: 200px; }
+}
