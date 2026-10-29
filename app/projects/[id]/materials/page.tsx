@@ -102,7 +102,7 @@ function NewMaterialDialog({ pid, itemId, onClose, onCreated }: { pid: string; i
   const [seeded, setSeeded] = useState(false);
   if (item && !seeded) {
     setSeeded(true);
-    setF((x) => ({ ...x, brand_id: item.brand_id, entity: item.entity, section_id: item.section_id === "search" ? "campaign" : item.section_id }));
+    setF((x) => ({ ...x, brand_id: item.brand_id, entity: item.entity, section_id: ["campaign", "market", "influencer"].includes(item.section_id) ? item.section_id : "campaign" }));
   }
   const action = useAction();
   const brand = brands.find((b) => b.id === f.brand_id);
