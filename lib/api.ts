@@ -68,6 +68,38 @@ export type Brand = {
 
 export type SectionWindow = { section_id: string; label: string; start: string; end: string; source: string };
 
+// 조사 범위 (팩트북 표준 목차): one setting per item; unset fields use the catalog default.
+export type ScopeSetting = {
+  item_id: string;
+  enabled: boolean;
+  period: "inherit" | "months" | "custom";
+  months: number | null;
+  start?: string | null;
+  end?: string | null;
+  channels: string[] | null;
+  targets: string[] | null;
+  max_items: number | null;
+  focus?: string | null;
+  keywords?: string[];
+};
+export type ScopeResolved = ScopeSetting & { start: string; end: string; channels: string[]; keywords: string[]; automation: "auto" | "manual" | "generated" };
+export type ScopeEntry = ScopeResolved & { direction: string[] };
+export type ScopePart = { id: string; no: string; label: string; en: string; question: string };
+export type ScopeSpec = {
+  id: string;
+  part: string;
+  group: string;
+  title: string;
+  question: string;
+  subject: "self" | "competitor" | "benchmark" | "market";
+  collector: string | null;
+  templates: string[];
+  channels: string[];
+  uploads: string[];
+  from: string[];
+  output: string;
+};
+
 export type ProjectConfig = {
   name: string;
   client: string;
@@ -78,6 +110,7 @@ export type ProjectConfig = {
   report_profile: string;
   collection_cutoff: string | null;
   section_windows: SectionWindow[];
+  scope: ScopeSetting[];
   target_hypothesis: string | null;
   import_defaults_applied: string[];
 };
@@ -116,6 +149,7 @@ export type ResearchItem = {
   entity: string;
   role: "self" | "competitor" | "benchmark" | "market";
   section_id: string;
+  scope_id: string | null;
   question: string;
   period_start: string;
   period_end: string;
@@ -154,7 +188,7 @@ export type Usage = { budget_per_run_usd: number; total_cost_usd: number; provid
 
 export type LeadProposal = { id: string; slide_id: string; slide_title: string; current: { parts: Part[] }[]; parts: Part[]; status: "pending" | "accepted" | "rejected" | "failed"; attempts: number; errors: string[]; model: string | null; created_at: string };
 
-export type ResearchPlan = { id: string; version: number; confirmed_at: string | null; items: ResearchItem[] };
+export type ResearchPlan = { id: string; version: number; confirmed_at: string | null; scope: ScopeEntry[]; items: ResearchItem[] };
 
 export type Part = { type: "text" | "fact" | "meta" | "date" | "name" | "link"; text?: string | null; display?: string | null; fact_id?: string | null; formatter?: string | null; href?: string | null; bold?: boolean };
 
@@ -225,6 +259,7 @@ export type ExportOut = { id: string; deck_id: string; deck_version: number; qc:
 export type Meta = {
   profiles: { id: string; label: string }[];
   sections: { id: string; label: string; templates: string[]; data: string; default_window: string }[];
+  scope: { parts: ScopePart[]; items: ScopeSpec[] };
   default_slides: string[];
   template_labels: Record<string, string>;
   channels: Channel[];
