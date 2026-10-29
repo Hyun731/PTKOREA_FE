@@ -6,9 +6,10 @@ import { Suspense, useMemo, useState } from "react";
 import { CroppedImage } from "@/components/crop";
 import { ImpactPanel, ImpactZone } from "@/components/impact";
 import { MaterialDrawer } from "@/components/material-drawer";
-import { SECTION_LABEL, useProject } from "@/components/project-context";
-import { Dialog, ErrorBox, Field, FileButton, Notice, PageIntro, Status, fmtDate } from "@/components/ui";
-import { api, type Batch, type Material, type ResearchPlan } from "@/lib/api";
+import { MaterialStudio } from "@/components/material-studio";
+import { useProject } from "@/components/project-context";
+import { Dialog, ErrorBox, Field, FileButton, PageIntro, Status, fmtDate } from "@/components/ui";
+import { api, type Batch, type Material, type ProjectConfig, type ResearchPlan } from "@/lib/api";
 import { useAction, useApi } from "@/lib/hooks";
 
 function CsvSection({ pid, onChanged }: { pid: string; onChanged: () => void }) {
@@ -226,8 +227,9 @@ function MaterialGrid({ cards, brandName, onOpen }: { cards: Material[]; brandNa
                   <Status value={m.review_status} />
                 </div>
                 <div className="meta">
-                  {SECTION_LABEL[m.section_id]} · {m.entity ?? brandName(m.brand_id)} · {fmtDate(m.activity_date ?? m.source.published_at)}
+                  {m.source.publisher ?? brandName(m.brand_id)} · {fmtDate(m.activity_date ?? m.source.published_at)}
                 </div>
+                {m.summary && <div className="summary">{m.summary}</div>}
                 <div className="meta num">
                   이미지 {m.assets.length} · 수치 {m.facts.length} · 채택 문장 {acceptedClaims}/{m.claims.length}
                 </div>
@@ -243,27 +245,33 @@ function MaterialGrid({ cards, brandName, onOpen }: { cards: Material[]; brandNa
   );
 }
 
+// Cards made before the 3C plan (or by hand) find their item from their section and who they are about.
+function scopeOf(m: Material, cfg: ProjectConfig): string {
+  if (m.scope_id) return m.scope_id;
+  if (m.section_id === "influencer") return "2-7";
+  if (m.section_id === "market") return "3-1";
+  if (cfg.brands.some((b) => m.entity && b.competitors.includes(m.entity))) return "3-7";
+  if (cfg.brands.some((b) => m.entity && b.benchmarks.includes(m.entity))) return "3-9";
+  return "2-8";
+}
+
 function MaterialsInner() {
-  const { project, brandName, reload: reloadProject } = useProject();
+  const { project, meta, brandName, reload: reloadProject } = useProject();
   const params = useSearchParams();
   const router = useRouter();
   const pid = project?.id ?? null;
   const itemId = params.get("item");
-  const [filters, setFilters] = useState({ brand_id: "", section_id: "", status: "" });
-  const qs = new URLSearchParams(Object.entries(filters).filter(([, v]) => v)).toString();
-  const { data: materials, reload } = useApi<Material[]>(pid ? `/projects/${pid}/materials${qs ? `?${qs}` : ""}` : null);
+  const { data: materials, reload } = useApi<Material[]>(pid ? `/projects/${pid}/materials` : null);
   const [open, setOpen] = useState<string | null>(null);
+  const [detail, setDetail] = useState<string | null>(null);
   const [adding, setAdding] = useState(Boolean(itemId));
   const dedupe = useAction();
   // Extra sources of the same activity live inside their primary card, not as cards of their own.
   const cards = useMemo(() => (materials ?? []).filter((m) => !m.duplicate_of), [materials]);
+  const live = cards.filter((m) => m.review_status !== "excluded");
+  const excluded = cards.filter((m) => m.review_status === "excluded");
   const grouped = (materials ?? []).length - cards.length;
-  const counts = useMemo(() => {
-    const c = { candidate: 0, accepted: 0, excluded: 0 };
-    for (const m of cards) c[m.review_status]++;
-    return c;
-  }, [cards]);
-  if (!pid || !project) return <p className="muted">불러오는 중…</p>;
+  if (!pid || !project || !meta) return <p className="muted">불러오는 중…</p>;
   const changed = () => {
     void reload();
     void reloadProject();
@@ -293,110 +301,116 @@ function MaterialsInner() {
     setAdding(false);
     if (itemId) router.replace(`/projects/${pid}/materials`);
   };
+  const specOf = Object.fromEntries(meta.scope.items.map((sp) => [sp.id, sp]));
+  const byScope: Record<string, Material[]> = {};
+  for (const m of live) (byScope[scopeOf(m, project.config)] ??= []).push(m);
+  const waiting = live.filter((m) => m.review_status === "candidate").length;
+  const accepted = live.length - waiting;
 
   return (
     <div className="stack-lg">
       <PageIntro
         step="3단계"
-        title="자료 수집"
+        title="자료 확인"
         actions={
-          <button className="btn primary" onClick={() => setAdding(true)}>
-            + 자료 카드 추가
+          <button className="btn" onClick={() => setAdding(true)}>
+            + 자료 직접 추가
           </button>
         }
       >
-        URL·이미지로 자료 카드를 만들고, 정량 CSV를 올립니다.
+        모인 자료를 자사 → 경쟁사 → 소비자 순서로 묶었습니다. 카드를 열어 요약을 읽고, 장표에 쓸 문장을 고른 뒤 채택하세요.
       </PageIntro>
 
       <section className="card" aria-labelledby="box-title">
         <div className="card-head">
           <div className="grow">
-            <h2 id="box-title">자료 보관함</h2>
+            <h2 id="box-title">모인 자료</h2>
             <p className="num">
-              검토 전 {counts.candidate} · 채택 {counts.accepted} · 제외 {counts.excluded}
+              확인 전 {waiting} · 채택 {accepted}
               {grouped > 0 && ` · 같은 사례로 묶인 추가 출처 ${grouped}`}
             </p>
           </div>
-          <div className="row wrap" role="group" aria-label="자료 필터">
-            <label className="sr-only" htmlFor="f-brand">
-              브랜드
-            </label>
-            <select id="f-brand" style={{ width: "auto" }} value={filters.brand_id} onChange={(e) => setFilters({ ...filters, brand_id: e.target.value })}>
-              <option value="">모든 브랜드</option>
-              {project.config.brands.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-            </select>
-            <label className="sr-only" htmlFor="f-sec">
-              장표
-            </label>
-            <select id="f-sec" style={{ width: "auto" }} value={filters.section_id} onChange={(e) => setFilters({ ...filters, section_id: e.target.value })}>
-              <option value="">모든 장표</option>
-              {["campaign", "market", "influencer"].map((s) => (
-                <option key={s} value={s}>
-                  {SECTION_LABEL[s]}
-                </option>
-              ))}
-            </select>
-            <label className="sr-only" htmlFor="f-st">
-              상태
-            </label>
-            <select id="f-st" style={{ width: "auto" }} value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}>
-              <option value="">모든 상태</option>
-              <option value="candidate">검토 전</option>
-              <option value="accepted">채택</option>
-              <option value="excluded">제외</option>
-            </select>
-          </div>
-        </div>
-        <div className="row wrap" style={{ gap: 8 }}>
-          <span className="small muted grow">같은 활동을 다룬 기사는 카드 하나로 묶고, 조사 기간 밖 활동은 제외합니다.</span>
-          <button className="btn sm" onClick={checkPeriod} disabled={dedupe.busy}>
-            기간 밖 자료 정리
-          </button>
-          <button className="btn sm" onClick={findSame} disabled={dedupe.busy}>
-            같은 사례 찾아 묶기
-          </button>
         </div>
         <ErrorBox error={dedupe.error} />
-        {materials && materials.length === 0 && (
+        {materials && live.length === 0 && (
           <div className="empty">
-            <strong>{qs ? "조건에 맞는 자료가 없습니다" : "아직 자료가 없습니다"}</strong>
-            {qs ? "필터를 바꿔 보세요." : "‘+ 자료 카드 추가’로 기사·게시물 URL과 캡처 이미지를 넣으세요. 자동 수집 자료도 이 보관함에 함께 들어옵니다."}
+            <strong>아직 자료가 없습니다</strong>
+            2단계 조사 계획에서 조사를 시작하거나, ‘+ 자료 직접 추가’로 기사·게시물 URL을 넣으세요.
           </div>
         )}
-        {filters.status ? (
-          <MaterialGrid cards={cards} brandName={brandName} onOpen={setOpen} />
-        ) : (
-          <div className="stack-lg">
-            {([
-              ["candidate", "검토 전", counts.candidate],
-              ["accepted", "채택됨", counts.accepted],
-              ["excluded", "제외됨", counts.excluded],
-            ] as const).map(([status, label, n]) =>
-              n > 0 && (
-                <div key={status}>
-                  <div className="group-title mt16">{label} · {n}</div>
-                  <MaterialGrid cards={cards.filter((m) => m.review_status === status)} brandName={brandName} onOpen={setOpen} />
-                </div>
-              ),
-            )}
+        {meta.scope.parts.map((part) => {
+          const items = meta.scope.items.filter((sp) => sp.part === part.id && byScope[sp.id]?.length);
+          if (items.length === 0) return null;
+          return (
+            <div key={part.id} className="mt16">
+              <div className="mgroup-head">
+                <span className="scope-no" aria-hidden>
+                  {part.no}
+                </span>
+                <h3 style={{ margin: 0 }}>{part.label}</h3>
+              </div>
+              {items.map((sp) => {
+                const list = byScope[sp.id];
+                const entities = [...new Set(list.map((m) => m.entity ?? brandName(m.brand_id)))];
+                return (
+                  <div key={sp.id} className="mt12">
+                    <div className="row wrap" style={{ gap: 8 }}>
+                      <span className="scope-id num">{sp.id}</span>
+                      <span className="title">{sp.title}</span>
+                      <span className="small muted num">{list.length}건</span>
+                    </div>
+                    {entities.map((e) => (
+                      <div key={e}>
+                        {entities.length > 1 && <div className="group-title mt8">{e}</div>}
+                        <MaterialGrid cards={list.filter((m) => (m.entity ?? brandName(m.brand_id)) === e)} brandName={brandName} onOpen={setOpen} />
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+        {Object.keys(byScope).some((k) => !specOf[k]) && (
+          <div className="mt16">
+            <div className="group-title">기타</div>
+            <MaterialGrid cards={Object.entries(byScope).filter(([k]) => !specOf[k]).flatMap(([, v]) => v)} brandName={brandName} onOpen={setOpen} />
           </div>
         )}
+        {excluded.length > 0 && (
+          <details className="more">
+            <summary>제외된 자료 ({excluded.length})</summary>
+            <MaterialGrid cards={excluded} brandName={brandName} onOpen={setOpen} />
+          </details>
+        )}
+        <details className="more">
+          <summary>정리 도구</summary>
+          <div className="row wrap mt8" style={{ gap: 8 }}>
+            <span className="small muted grow">같은 활동을 다룬 기사는 카드 하나로 묶고, 조사 기간 밖 활동은 제외합니다.</span>
+            <button className="btn sm" onClick={checkPeriod} disabled={dedupe.busy}>
+              기간 밖 자료 정리
+            </button>
+            <button className="btn sm" onClick={findSame} disabled={dedupe.busy}>
+              같은 사례 찾아 묶기
+            </button>
+          </div>
+        </details>
       </section>
 
       <CsvSection pid={pid} onChanged={changed} />
 
-      {project.counts.materials + project.counts.batches > 0 && (
-        <Notice>
-          자료를 다 넣었다면 <Link href={`/projects/${pid}/review`}>4. 검토·시사점</Link>에서 채택 여부를 정하세요.
-        </Notice>
-      )}
+      <div className="sticky-foot">
+        <div className="row wrap">
+          <span className="grow small muted">{waiting > 0 ? `확인 전 자료 ${waiting}개 — 채택하지 않은 자료는 장표에 쓰이지 않습니다.` : "모든 자료를 확인했습니다."}</span>
+          <Link href={`/projects/${pid}/review`} className={`btn ${waiting === 0 ? "primary" : ""}`}>
+            다음 단계: 검토·시사점 →
+          </Link>
+        </div>
+      </div>
 
       {adding && <NewMaterialDialog pid={pid} itemId={itemId} onClose={closeAdd} onCreated={(id) => { closeAdd(); changed(); setOpen(id); }} />}
-      {open && <MaterialDrawer id={open} onClose={() => setOpen(null)} onChanged={changed} />}
+      {open && <MaterialStudio id={open} onClose={() => setOpen(null)} onChanged={changed} onDetail={() => { setDetail(open); setOpen(null); }} />}
+      {detail && <MaterialDrawer id={detail} onClose={() => setDetail(null)} onChanged={changed} />}
     </div>
   );
 }
