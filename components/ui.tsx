@@ -149,7 +149,7 @@ export function Parts({ parts }: { parts: Part[] }) {
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-export function Dialog({ title, subtitle, onClose, children, footer, variant = "side", badge }: { title: string; subtitle?: ReactNode; onClose: () => void; children: ReactNode; footer?: ReactNode; variant?: "side" | "center"; badge?: ReactNode }) {
+export function Dialog({ title, subtitle, onClose, children, footer, variant = "side", badge, wide }: { title: string; subtitle?: ReactNode; onClose: () => void; children: ReactNode; footer?: ReactNode; variant?: "side" | "center"; badge?: ReactNode; wide?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const titleId = useId();
   useEffect(() => {
@@ -186,7 +186,7 @@ export function Dialog({ title, subtitle, onClose, children, footer, variant = "
   return createPortal(
     <>
       <div className="dialog-back" onClick={onClose} aria-hidden />
-      <div ref={ref} className={`dialog ${variant === "center" ? "center" : ""}`} role="dialog" aria-modal="true" aria-labelledby={titleId}>
+      <div ref={ref} className={`dialog ${variant === "center" ? "center" : ""} ${wide ? "wide" : ""}`} role="dialog" aria-modal="true" aria-labelledby={titleId}>
         <div className="dialog-head">
           <div className="grow">
             {subtitle && <div className="small muted">{subtitle}</div>}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ChatThread, type ChatMessage } from "@/components/chat";
 import { CroppedImage } from "@/components/crop";
 import { Dialog, ErrorBox, Status, fmtDate } from "@/components/ui";
 import { api, type Claim, type Material } from "@/lib/api";
@@ -8,30 +9,42 @@ import { useAction, useApi } from "@/lib/hooks";
 
 const KIND: Record<Claim["kind"], string> = { fact: "사실", interpretation: "관찰", recommendation: "제언" };
 
-type Turn = { role: "user" | "ai"; text: string; sources?: { title: string; url: string }[]; searched?: string | null };
+/** Left sidebar: a conversation about this material; the page answers first, the web when it does not say. */
+function ChatSide({ m }: { m: Material }) {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const action = useAction();
+  const ask = (message: string) =>
+    void action.run(async () => {
+      const history = messages.map(({ role, text }) => ({ role, text }));
+      setMessages((x) => [...x, { role: "user", text: message }]);
+      const r = await api.post<{ answer: string; sources: { title: string; url: string }[]; searched: string | null }>(`/materials/${m.id}/chat`, { message, history });
+      setMessages((x) => [...x, { role: "ai", text: r.answer, links: r.sources, note: r.searched ? `‘${r.searched}’로 웹에서 더 찾아봤어요` : null }]);
+    });
+  return (
+    <aside className="studio-side" aria-label="이 자료에 대해 묻기">
+      <h4>이 자료에 대해 묻기</h4>
+      <ChatThread
+        messages={messages}
+        busy={action.busy}
+        onSend={ask}
+        placeholder="무엇이든 물어보세요"
+        starters={["왜 이 활동을 했어?", "반응이나 성과는 어땠어?", "비슷한 다른 사례도 있어?"]}
+        empty={<p style={{ margin: 0 }}>원문을 읽고 답합니다. 원문에 없으면 웹에서 한 번 더 찾아보고 출처를 붙여 드려요.</p>}
+        error={<ErrorBox error={action.error} />}
+      />
+    </aside>
+  );
+}
 
-/** Left: what this material is — image, 해석 요약, and a chat that can look beyond the page. */
+/** Middle: what this material is — image, source, 해석 요약. */
 function UnderstandPane({ m, onChanged }: { m: Material; onChanged: () => Promise<void> }) {
   const asset = m.assets.find((a) => a.id === m.selected_asset_id) ?? m.assets[0];
-  const [turns, setTurns] = useState<Turn[]>([]);
-  const [text, setText] = useState("");
   const action = useAction();
   const summarize = () =>
     action.run(async () => {
       await api.post(`/materials/${m.id}/summary`);
       await onChanged();
     });
-  const ask = () => {
-    const message = text.trim();
-    if (!message) return;
-    void action.run(async () => {
-      const history = turns.map(({ role, text: t }) => ({ role, text: t }));
-      setTurns((x) => [...x, { role: "user", text: message }]);
-      setText("");
-      const r = await api.post<{ answer: string; sources: { title: string; url: string }[]; searched: string | null }>(`/materials/${m.id}/chat`, { message, history });
-      setTurns((x) => [...x, { role: "ai", text: r.answer, sources: r.sources, searched: r.searched }]);
-    });
-  };
   return (
     <div className="studio-pane">
       <div className="studio-image">{asset ? <CroppedImage asset={asset} /> : <span className="muted small">이미지 없음</span>}</div>
@@ -58,43 +71,7 @@ function UnderstandPane({ m, onChanged }: { m: Material; onChanged: () => Promis
             </button>
           </div>
         )}
-      </section>
-      <section aria-labelledby={`chat-${m.id}`} className="studio-chat">
-        <h4 id={`chat-${m.id}`}>더 물어보기</h4>
-        <p className="small muted">원문으로 답하고, 원문에 없으면 웹에서 한 번 더 찾아봅니다.</p>
-        {turns.map((t, k) => (
-          <div key={k} className={`dir-turn ${t.role === "user" ? "me" : "ai"}`}>
-            {t.searched && <div className="small faint">‘{t.searched}’로 더 찾아봄</div>}
-            {t.text}
-            {(t.sources ?? []).map((s) => (
-              <div key={s.url} className="small">
-                <a href={s.url} target="_blank" rel="noreferrer">
-                  {s.title || s.url} ↗
-                </a>
-              </div>
-            ))}
-          </div>
-        ))}
-        {action.busy && turns.length > 0 && turns[turns.length - 1].role === "user" && <div className="small muted">답을 찾는 중…</div>}
         <ErrorBox error={action.error} />
-        <div className="row" style={{ gap: 8, alignItems: "flex-end" }}>
-          <textarea
-            rows={2}
-            aria-label="이 자료에 대해 묻기"
-            value={text}
-            placeholder="예: 이 팝업은 얼마나 오래 열었어? 반응은 어땠어?"
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                e.preventDefault();
-                ask();
-              }
-            }}
-          />
-          <button className="btn sm primary" disabled={action.busy || !text.trim()} onClick={ask}>
-            묻기
-          </button>
-        </div>
       </section>
     </div>
   );
@@ -237,6 +214,7 @@ export function MaterialStudio({ id, onClose, onChanged, onDetail }: { id: strin
     }, msg);
   return (
     <Dialog
+      wide
       title={m?.event_name || m?.title || "자료"}
       subtitle={m ? `${m.entity ?? ""}${m.event_name ? ` · ${m.title}` : ""}` : undefined}
       badge={m ? <Status value={m.review_status} /> : undefined}
@@ -270,7 +248,8 @@ export function MaterialStudio({ id, onClose, onChanged, onDetail }: { id: strin
       {!m ? (
         <p className="muted">불러오는 중…</p>
       ) : (
-        <div className="studio">
+        <div className="studio with-chat">
+          <ChatSide m={m} />
           <UnderstandPane m={m} onChanged={refresh} />
           <WritePane m={m} onChanged={refresh} />
         </div>
