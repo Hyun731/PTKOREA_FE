@@ -6,6 +6,7 @@ import { ROLE_LABEL, useProject } from "@/components/project-context";
 import { Dialog, ErrorBox, Field, Notice, PageIntro, fmtDateTime } from "@/components/ui";
 import { api, type ItemResult, type Job, type ResearchItem, type ResearchPlan, type ScopeEntry, type ScopeSetting } from "@/lib/api";
 import { useAction, useApi, useJob } from "@/lib/hooks";
+import { ChatThread, type ChatMessage } from "@/components/chat";
 
 const AUTOMATION: Record<string, [string, string]> = { auto: ["자동 수집", "b-ok"], manual: ["직접 입력", "b-outline"], generated: ["앞 항목으로 생성", "b-brand"] };
 
@@ -20,50 +21,27 @@ function settingOf(e: ScopeEntry, enabled: boolean): ScopeSetting {
   return { item_id: e.item_id, enabled, period: e.period, months: e.months, start: custom ? e.start : null, end: custom ? e.end : null, channels: e.channels, targets: e.targets, max_items: e.max_items, focus: e.focus ?? null, keywords: e.keywords ?? [] };
 }
 
-type Turn = { who: "me" | "ai"; text: string };
-
 /** Ask for a change in words; the AI rewrites the item's period, channels, targets and focus. */
 function DirectionChat({ pid, entry, version, onChanged }: { pid: string; entry: ScopeEntry; version: number; onChanged: () => Promise<void> }) {
-  const [text, setText] = useState("");
-  const [turns, setTurns] = useState<Turn[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const action = useAction();
-  const send = () => {
-    const message = text.trim();
-    if (!message) return;
+  const send = (message: string) =>
     void action.run(async () => {
-      setTurns((t) => [...t, { who: "me", text: message }]);
-      setText("");
+      setMessages((t) => [...t, { role: "user", text: message }]);
       const r = await api.post<{ reply: string }>(`/projects/${pid}/scope/${entry.item_id}/direction`, { base_version: version, message });
-      setTurns((t) => [...t, { who: "ai", text: r.reply || "조사 방향을 고쳤습니다." }]);
+      setMessages((t) => [...t, { role: "ai", text: r.reply || "조사 방향을 고쳤습니다." }]);
       await onChanged();
     });
-  };
   return (
     <div className="dir-chat">
-      {turns.map((t, k) => (
-        <div key={k} className={`dir-turn ${t.who}`}>
-          {t.text}
-        </div>
-      ))}
-      <ErrorBox error={action.error} />
-      <div className="row" style={{ gap: 8, alignItems: "flex-end" }}>
-        <textarea
-          rows={2}
-          aria-label="조사 방향 바꾸기 요청"
-          value={text}
-          placeholder="예: 기간은 최근 1년으로, 팝업·오프라인 행사 위주로 봐줘"
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-              e.preventDefault();
-              send();
-            }
-          }}
-        />
-        <button className="btn sm primary" disabled={action.busy || !text.trim()} onClick={send}>
-          {action.busy ? "고치는 중…" : "요청"}
-        </button>
-      </div>
+      <ChatThread
+        messages={messages}
+        busy={action.busy}
+        onSend={send}
+        placeholder="어떻게 바꿀지 말해 주세요"
+        starters={["기간을 최근 1년으로", "팝업·오프라인 행사 위주로", "카드는 5개면 충분해"]}
+        error={<ErrorBox error={action.error} />}
+      />
     </div>
   );
 }
