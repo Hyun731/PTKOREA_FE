@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { ChatThread, type ChatMessage } from "@/components/chat";
+import { CauseAction, CauseBadge, RecollectButton } from "@/components/missing-cause";
 import { useProject } from "@/components/project-context";
 import { ErrorBox, PageIntro } from "@/components/ui";
 import { api, type Outline, type OutlineSlide } from "@/lib/api";
@@ -225,15 +226,24 @@ export default function DraftPage() {
                   {outline.missing.map((o) => (
                     <li key={o.slot_id}>
                       <div className="grow">
-                        <div className="title">{o.label}</div>
-                        <div className="meta">{o.reason}</div>
+                        <div className="row wrap" style={{ gap: 8 }}>
+                          <span className="title">{o.label}</span>
+                          <CauseBadge cause={o.cause} />
+                        </div>
+                        <div className="meta">{o.action ?? o.reason}</div>
+                      </div>
+                      <div className="actions">
+                        <CauseAction pid={pid} cause={o.cause} action={o.action} />
                       </div>
                     </li>
                   ))}
                 </ul>
-                <p className="small muted mt8">
-                  자료를 모으면 들어갑니다 — <Link href={`/projects/${pid}/materials`}>자료 확인</Link>
-                </p>
+                <div className="row wrap mt8" style={{ gap: 8 }}>
+                  <RecollectButton pid={pid} itemIds={outline.missing.flatMap((o) => o.item_ids ?? [])} onDone={() => void refresh()} />
+                  <span className="small muted">
+                    자료를 채택하면 들어갑니다 — <Link href={`/projects/${pid}/materials`}>자료 확인</Link>
+                  </span>
+                </div>
               </details>
             )}
           </article>

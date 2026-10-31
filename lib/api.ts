@@ -194,7 +194,10 @@ export type LeadProposal = { id: string; slide_id: string; slide_title: string; 
 // 초안 흐름: the deck read as text (sections and slides in order).
 export type OutlineSlide = { kind: "slide"; slide_id: string; page_no: number | null; title: string; page_role: string; section: string; lead: string; points: string[]; source: string; slot_id: string | null; edited: boolean; continued: boolean };
 export type OutlineSection = { kind: "section"; title: string; subtitle: string; page_no: number | null };
-export type Outline = { flow: (OutlineSlide | OutlineSection)[]; pages: number; missing: { slot_id: string; label: string; reason: string | null }[]; omitted: { slot_id: string; label: string; reason: string | null }[]; fingerprint: string };
+// Why a planned slide has no page: cards waiting to be adopted, nothing collected, an input the collector needs, a CSV.
+export type MissingCause = "adopt" | "collect" | "setup" | "upload" | "access";
+export type MissingSlot = { slot_id: string; label: string; reason: string | null; cause: MissingCause | null; action: string | null; item_ids: string[] };
+export type Outline = { flow: (OutlineSlide | OutlineSection)[]; pages: number; missing: MissingSlot[]; omitted: { slot_id: string; label: string; reason: string | null }[]; fingerprint: string };
 
 export type ResearchPlan = { id: string; version: number; confirmed_at: string | null; scope: ScopeEntry[]; items: ResearchItem[] };
 
@@ -246,7 +249,7 @@ export type Batch = { id: string; kind: "facts" | "posts"; filename: string; sta
 export type QCIssue = { code: string; severity: "block" | "warn"; message: string; action: string; slide_id: string | null; block_id: string | null };
 export type QC = { blocks: number; warns: number; issues: QCIssue[] };
 
-export type Slot = { slot_id: string; section_id: string; template_id: string; brand_id: string | null; label: string; readiness: "ready" | "needs_input" | "omitted"; reason: string | null; slide_ids: string[] };
+export type Slot = { slot_id: string; section_id: string; template_id: string; brand_id: string | null; label: string; readiness: "ready" | "needs_input" | "omitted"; reason: string | null; slide_ids: string[]; cause?: MissingCause | null; action?: string | null; item_ids?: string[] };
 
 export type SlidePlanOut = {
   plan: Slot[];

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { SECTION_LABEL, useProject } from "@/components/project-context";
+import { CauseAction, CauseBadge, RecollectButton } from "@/components/missing-cause";
 import { SlideMap } from "@/components/slide-map";
 import type { SlideKind } from "@/lib/impact";
 import { Checklist, ErrorBox, Notice, PageIntro, ReasonButton, Stat, Status, fmtDateTime } from "@/components/ui";
@@ -92,6 +93,9 @@ export default function OutputPage() {
         <Stat k="자료가 없어 빠진 장표" v={plan.counts.needs_input} />
         <Stat k="출력 페이지 수" v={plan.counts.pages} />
       </div>
+      <div className="row wrap" style={{ gap: 8 }}>
+        <RecollectButton pid={pid} itemIds={plan.plan.flatMap((s) => (s.readiness === "needs_input" ? s.item_ids ?? [] : []))} onDone={() => void reload()} />
+      </div>
       <ErrorBox error={action.error} />
 
       {/* Step A */}
@@ -178,10 +182,11 @@ export default function OutputPage() {
                   </div>
                 </th>
                 <td>
-                  <Status value={s.readiness} />
+                  {s.readiness === "needs_input" && s.cause ? <CauseBadge cause={s.cause} /> : <Status value={s.readiness} />}
                 </td>
-                <td className="small">{s.readiness === "ready" ? `${s.slide_ids.length}장 생성` : s.reason}</td>
+                <td className="small">{s.readiness === "ready" ? `${s.slide_ids.length}장 생성` : (s.action ?? s.reason)}</td>
                 <td style={{ textAlign: "right" }}>
+                  {s.readiness === "needs_input" && <CauseAction pid={pid} cause={s.cause ?? null} action={s.action ?? null} />}
                   {s.readiness === "omitted" && (
                     <button className="btn sm ghost" onClick={() => action.run(async () => { await api.del(`/projects/${pid}/slot-omissions/${encodeURIComponent(s.slot_id)}`); await refresh(); }, "생략을 취소했습니다")}>
                       생략 취소
