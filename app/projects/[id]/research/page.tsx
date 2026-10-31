@@ -158,7 +158,9 @@ export default function ResearchPage() {
   // An influencer item can run with chosen post URLs, hashtags to discover posts with, or both.
   const hasInput = (i: ResearchItem) => urlsOf(i).length > 0 || tagsOf(i).length > 0;
   const ran = (i: ResearchItem) => ["succeeded", "partial", "needs_review"].includes(i.execution_status);
-  const ready = (i: ResearchItem) => i.selected && i.review_status !== "excluded" && canAuto(i) && !ran(i) && !itemBusy(i) && (i.section_id !== "influencer" || hasInput(i));
+  // The search found nothing that names the subject: running it again as is would find nothing again.
+  const noMaterial = (i: ResearchItem) => (i.last_result?.errors ?? []).some((e) => e.code === "NO_MATERIAL");
+  const ready = (i: ResearchItem) => i.selected && i.review_status !== "excluded" && canAuto(i) && !ran(i) && !noMaterial(i) && !itemBusy(i) && (i.section_id !== "influencer" || hasInput(i));
 
   const active = plan.items.filter((i) => i.selected && i.review_status !== "excluded");
   const excluded = plan.items.filter((i) => i.review_status === "excluded");
@@ -249,6 +251,12 @@ export default function ResearchPage() {
             게시물 URL·해시태그 넣기
           </button>
         );
+      else if (noMaterial(i))
+        next = (
+          <Link className="btn sm primary" href={`/projects/${pid}/setup`}>
+            이름·다른 표기 고치기
+          </Link>
+        );
       else if (i.section_id === "search")
         next = (
           <Link className="btn sm" href={`/projects/${pid}/materials`}>
@@ -283,6 +291,7 @@ export default function ResearchPage() {
             {project.config.brands.length > 1 && <span className="small muted">{brandName(i.brand_id)} 보고서</span>}
             {i.review_status === "accepted" && <span className="badge b-ok">확인 완료</span>}
             {isRunning && <span className="badge b-brand">조사 중</span>}
+            {!isRunning && noMaterial(i) && <span className="badge b-bad">자료 없음</span>}
           </div>
           {r.status && (
             <div className="meta">
@@ -309,7 +318,7 @@ export default function ResearchPage() {
                   게시물 URL·해시태그 수정
                 </button>
               )}
-              {i.section_id !== "search" && ran(i) && (
+              {i.section_id !== "search" && (ran(i) || noMaterial(i)) && (
                 <button className="btn sm ghost" disabled={action.busy || isRunning || !canAuto(i)} onClick={() => run([i.id], true)}>
                   다시 조사
                 </button>

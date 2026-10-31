@@ -64,6 +64,8 @@ export type Brand = {
   competitors: string[];
   benchmarks: string[];
   keyword_groups: { entity: string; keywords: string[] }[];
+  // Other spellings per name (마땡킴 → Matin Kim); a missing name is filled by the AI on save.
+  entity_aliases?: Record<string, string[]>;
 };
 
 export type SectionWindow = { section_id: string; label: string; start: string; end: string; source: string };

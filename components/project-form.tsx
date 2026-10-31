@@ -37,6 +37,31 @@ function ListInput({ id, describedBy, value, onChange, max, placeholder }: { id:
   );
 }
 
+// Articles often name a brand only one way (Matin Kim, 샘소나이트). Search results that use another
+// spelling than the one typed above would be dropped, so each name carries its other spellings.
+function AliasRows({ brand, onChange }: { brand: Brand; onChange: (b: Brand) => void }) {
+  const names = [...new Set([brand.name, ...brand.competitors, ...brand.benchmarks].filter(Boolean))];
+  if (names.length === 0) return null;
+  const ent = brand.entity_aliases ?? {};
+  const own = (n: string) => (n === brand.name ? [...new Set([...brand.aliases, ...(ent[n] ?? [])])] : ent[n] ?? []);
+  const set = (n: string, v: string[]) => {
+    if (n === brand.name) onChange({ ...brand, aliases: v, entity_aliases: { ...ent, [n]: [] } });
+    else onChange({ ...brand, entity_aliases: { ...ent, [n]: v } });
+  };
+  return (
+    <div className="mt8">
+      <p className="small muted">다른 표기 (영문명 등) — 비워 두면 저장할 때 AI가 채웁니다. 기사에서 이 이름으로 불려도 같은 브랜드로 봅니다.</p>
+      <div className="frows mt8">
+        {names.map((n) => (
+          <Field key={n} row label={n} help="쉼표로 구분" impact="brand.aliases">
+            {(id, d) => <ListInput key={`${n}:${own(n).join(",")}`} id={id} describedBy={d} value={own(n)} onChange={(v) => set(n, v)} placeholder={n in ent ? "다른 표기 없음" : "저장하면 AI가 채웁니다"} />}
+          </Field>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function BrandEditor({ brand, onChange, onRemove, index }: { brand: Brand; onChange: (b: Brand) => void; onRemove?: () => void; index: number }) {
   const t = brand.target ?? { age_min: null, age_max: null, gender: "all" as const, label: "" };
   return (
@@ -85,13 +110,11 @@ function BrandEditor({ brand, onChange, onRemove, index }: { brand: Brand; onCha
           <Field row label="브랜드 ID" help="영문 대문자 1~5자" impact="brand.id">
             {(id, d) => <input id={id} aria-describedby={d} value={brand.id} maxLength={5} onChange={(e) => onChange({ ...brand, id: e.target.value.toUpperCase() })} />}
           </Field>
-          <Field row label="별칭" help="쉼표로 구분" impact="brand.aliases">
-            {(id, d) => <ListInput id={id} describedBy={d} value={brand.aliases} onChange={(v) => onChange({ ...brand, aliases: v })} />}
-          </Field>
           <Field row label="벤치마크 브랜드" help="쉼표로 구분" impact="brand.benchmarks">
             {(id, d) => <ListInput id={id} describedBy={d} value={brand.benchmarks} onChange={(v) => onChange({ ...brand, benchmarks: v })} />}
           </Field>
         </div>
+        <AliasRows brand={brand} onChange={onChange} />
       </details>
     </section>
   );
