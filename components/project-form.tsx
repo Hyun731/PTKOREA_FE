@@ -2,14 +2,14 @@
 
 import { useState } from "react";
 import { Field } from "@/components/ui";
-import type { Brand, Meta, ProjectConfig } from "@/lib/api";
+import type { Brand, Meta, OfficialProfile, ProjectConfig } from "@/lib/api";
 
 export type ProjectDraft = Pick<ProjectConfig, "name" | "client" | "period" | "brands" | "collection_cutoff" | "target_hypothesis">;
 
 const split = (s: string) => s.split(",").map((x) => x.trim()).filter(Boolean);
 
 export function emptyBrand(i: number): Brand {
-  return { id: `B${i + 1}`, name: "", aliases: [], categories: [], target: { age_min: null, age_max: null, gender: "all", label: "" }, competitors: [], benchmarks: [], keyword_groups: [] };
+  return { id: `B${i + 1}`, name: "", aliases: [], categories: [], target: { age_min: null, age_max: null, gender: "all", label: "" }, competitors: [], benchmarks: [], keyword_groups: [], industry: null, official_profiles: [], competitor_profiles: {} };
 }
 
 function ListInput({ id, describedBy, value, onChange, max, placeholder }: { id: string; describedBy?: string; value: string[]; onChange: (v: string[]) => void; max?: number; placeholder?: string }) {
@@ -62,7 +62,95 @@ function AliasRows({ brand, onChange }: { brand: Brand; onChange: (b: Brand) => 
   );
 }
 
-function BrandEditor({ brand, onChange, onRemove, index }: { brand: Brand; onChange: (b: Brand) => void; onRemove?: () => void; index: number }) {
+// 공식 계정 한 채널 한 줄: 후보는 체크해 채택, 직접 입력, 또는 '운영 안 함'으로 확인.
+function OfficialProfileRow({ channel, label, autoCollect, profile, onChange }: { channel: string; label: string; autoCollect: boolean; profile: OfficialProfile | undefined; onChange: (p: OfficialProfile | null) => void }) {
+  const [draft, setDraft] = useState(profile?.status === "confirmed" ? profile.url : "");
+  const tag = autoCollect ? null : <span className="small muted"> (자동 수집 미지원)</span>;
+  if (profile?.status === "candidate")
+    return (
+      <div className="row" style={{ gap: 8 }}>
+        <span className="small" style={{ width: 90 }}>{label}{tag}</span>
+        <span className="grow small">
+          AI 추천: <a href={profile.url} target="_blank" rel="noreferrer">{profile.url}</a>
+        </span>
+        <button type="button" className="btn sm ok" onClick={() => onChange({ ...profile, status: "confirmed" })}>
+          채택
+        </button>
+        <button type="button" className="btn sm ghost" onClick={() => onChange({ channel, url: "", status: "none" })}>
+          아님
+        </button>
+      </div>
+    );
+  if (profile?.status === "confirmed")
+    return (
+      <div className="row" style={{ gap: 8 }}>
+        <span className="small" style={{ width: 90 }}>{label}{tag}</span>
+        <input className="grow" value={profile.url} onChange={(e) => onChange({ ...profile, url: e.target.value })} />
+        <button type="button" className="btn sm ghost" onClick={() => onChange(null)}>
+          삭제
+        </button>
+      </div>
+    );
+  if (profile?.status === "none")
+    return (
+      <div className="row" style={{ gap: 8 }}>
+        <span className="small muted" style={{ width: 90 }}>{label}{tag}</span>
+        <span className="small muted grow">운영 안 함</span>
+        <button type="button" className="btn sm ghost" onClick={() => onChange(null)}>
+          되돌리기
+        </button>
+      </div>
+    );
+  return (
+    <div className="row" style={{ gap: 8 }}>
+      <span className="small" style={{ width: 90 }}>{label}{tag}</span>
+      <input className="grow" placeholder="URL — 비워 두면 저장할 때 AI가 찾아봅니다" value={draft} onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => draft.trim() && onChange({ channel, url: draft.trim(), status: "confirmed" })} />
+      <button type="button" className="btn sm ghost" onClick={() => onChange({ channel, url: "", status: "none" })}>
+        운영 안 함
+      </button>
+    </div>
+  );
+}
+
+// 자사와 경쟁사 모두의 공식 계정 — 경쟁사는 Brand가 없어 이름으로 competitor_profiles에 보관한다.
+function OfficialAccountsRows({ brand, meta, onChange }: { brand: Brand; meta: Meta | null; onChange: (b: Brand) => void }) {
+  const names = [brand.name, ...brand.competitors].filter(Boolean);
+  const channels = meta?.official_channels ?? [];
+  if (names.length === 0 || channels.length === 0) return null;
+  const profilesFor = (n: string) => (n === brand.name ? brand.official_profiles ?? [] : brand.competitor_profiles?.[n] ?? []);
+  const setProfilesFor = (n: string, list: OfficialProfile[]) =>
+    n === brand.name ? onChange({ ...brand, official_profiles: list })
+                     : onChange({ ...brand, competitor_profiles: { ...(brand.competitor_profiles ?? {}), [n]: list } });
+  return (
+    <div className="mt8">
+      <p className="small muted">공식 계정 — 비워 두면 저장할 때 AI가 후보를 찾습니다. 후보는 체크해야 수집에 쓰입니다.</p>
+      <div className="frows mt8">
+        {names.map((n) => {
+          const profiles = profilesFor(n);
+          return (
+            <Field key={n} row label={n} impact="brand.official_accounts">
+              {() => (
+                <div className="stack" style={{ gap: 6 }}>
+                  {channels.map((c) => (
+                    <OfficialProfileRow key={c.id} channel={c.id} label={c.label} autoCollect={c.auto_collect}
+                      profile={profiles.find((p) => p.channel === c.id)}
+                      onChange={(next) => {
+                        const rest = profiles.filter((p) => p.channel !== c.id);
+                        setProfilesFor(n, next ? [...rest, next] : rest);
+                      }} />
+                  ))}
+                </div>
+              )}
+            </Field>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function BrandEditor({ brand, onChange, onRemove, index, meta }: { brand: Brand; onChange: (b: Brand) => void; onRemove?: () => void; index: number; meta: Meta | null }) {
   const t = brand.target ?? { age_min: null, age_max: null, gender: "all" as const, label: "" };
   return (
     <section className="card" aria-labelledby={`brand-${index}`}>
@@ -83,6 +171,18 @@ function BrandEditor({ brand, onChange, onRemove, index }: { brand: Brand; onCha
         </Field>
         <Field row label="경쟁사" required help="1~4개, 쉼표로 구분" impact="brand.competitors">
           {(id, d) => <ListInput id={id} describedBy={d} value={brand.competitors} onChange={(v) => onChange({ ...brand, competitors: v })} max={4} placeholder="경쟁X, 경쟁Y" />}
+        </Field>
+        <Field row label="업종" help="비워 두면 저장할 때 AI가 추천합니다" impact="brand.industry">
+          {(id, d) => (
+            <select id={id} aria-describedby={d} value={brand.industry ?? ""} onChange={(e) => onChange({ ...brand, industry: e.target.value || null })}>
+              <option value="">AI 추천 대기</option>
+              {(meta?.industries ?? []).map((i) => (
+                <option key={i.id} value={i.id}>
+                  {i.id}
+                </option>
+              ))}
+            </select>
+          )}
         </Field>
       </div>
       <details className="more">
@@ -115,6 +215,7 @@ function BrandEditor({ brand, onChange, onRemove, index }: { brand: Brand; onCha
           </Field>
         </div>
         <AliasRows brand={brand} onChange={onChange} />
+        <OfficialAccountsRows brand={brand} meta={meta} onChange={onChange} />
       </details>
     </section>
   );
@@ -163,6 +264,7 @@ export function ProjectForm({ value, onChange, meta }: { value: ProjectDraft; on
           key={i}
           index={i}
           brand={b}
+          meta={meta}
           onChange={(nb) => onChange({ ...value, brands: value.brands.map((x, j) => (j === i ? nb : x)) })}
           onRemove={value.brands.length > 1 ? () => onChange({ ...value, brands: value.brands.filter((_, j) => j !== i) }) : undefined}
         />

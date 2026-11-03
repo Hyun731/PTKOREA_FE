@@ -55,6 +55,9 @@ export const fileUrl = (path: string) => `${API_URL}${path}`;
 
 // ---------------------------------------------------------------- types (mirror API payloads)
 
+// confirmed: 사람이 확인·입력함 · candidate: AI가 찾아 사람 확인 대기 · none: '이 채널 운영 안 함'으로 확인함.
+export type OfficialProfile = { channel: string; url: string; status: "confirmed" | "candidate" | "none" };
+
 export type Brand = {
   id: string;
   name: string;
@@ -66,6 +69,11 @@ export type Brand = {
   keyword_groups: { entity: string; keywords: string[] }[];
   // Other spellings per name (마땡킴 → Matin Kim); a missing name is filled by the AI on save.
   entity_aliases?: Record<string, string[]>;
+  // 업종: 비어 있으면 저장할 때 AI가 추천해 채운다.
+  industry?: string | null;
+  official_profiles?: OfficialProfile[];
+  // 경쟁사는 Brand를 따로 안 두므로, 경쟁사 공식 계정은 이름으로 여기에 보관한다.
+  competitor_profiles?: Record<string, OfficialProfile[]>;
 };
 
 export type SectionWindow = { section_id: string; label: string; start: string; end: string; source: string };
@@ -280,4 +288,6 @@ export type Meta = {
   providers: Record<string, boolean>;
   manual_metrics: string[];
   render_backend: string;
+  industries: { id: string; types: string[]; review_required: boolean }[];
+  official_channels: { id: string; label: string; auto_collect: boolean }[];
 };
