@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ROLE_LABEL, useProject } from "@/components/project-context";
 import { Dialog, ErrorBox, Field, Notice, PageIntro, fmtDateTime } from "@/components/ui";
-import { api, type ItemResult, type Job, type ResearchItem, type ResearchPlan, type ScopeEntry, type ScopeSetting } from "@/lib/api";
+import { api, type CollectionMix, type ItemResult, type Job, type ResearchItem, type ResearchPlan, type ScopeEntry, type ScopeSetting } from "@/lib/api";
 import { useAction, useApi, useJob } from "@/lib/hooks";
 import { ChatThread, type ChatMessage } from "@/components/chat";
 
@@ -43,6 +43,71 @@ function DirectionChat({ pid, entry, version, onChanged }: { pid: string; entry:
         error={<ErrorBox error={action.error} />}
       />
     </div>
+  );
+}
+
+const MIX_CHANNELS: (keyof CollectionMix["brands"][number]["channels"])[] = ["press", "owned", "influencer", "cafe_blog", "community", "review"];
+
+/** Phase 1-4: 조사가 기사에만 치우쳤는지 바로 보이게 — 브랜드 × 채널 건수 표 하나와 경고 배지. */
+function CollectionMixCard({ mix }: { mix: CollectionMix | null }) {
+  if (!mix || mix.brands.length === 0) return null;
+  return (
+    <section className="card" aria-labelledby="mix-title">
+      <div className="card-head">
+        <div className="grow">
+          <h3 id="mix-title">수집량과 출처 구성</h3>
+          <p>채널마다 얼마나 모였는지, 기사에만 치우치지 않았는지 확인하세요.</p>
+        </div>
+      </div>
+      <table className="table mt8">
+        <caption className="sr-only">브랜드별 채널 수집 현황</caption>
+        <thead>
+          <tr>
+            <th scope="col">브랜드</th>
+            {MIX_CHANNELS.map((c) => (
+              <th key={c} scope="col">
+                {mix.brands[0].channels[c].label}
+              </th>
+            ))}
+            <th scope="col">접근 불가</th>
+          </tr>
+        </thead>
+        <tbody>
+          {mix.brands.map((b) => (
+            <tr key={b.brand_id}>
+              <th scope="row" style={{ color: "var(--text)", fontWeight: 600 }}>
+                {b.brand_name}
+              </th>
+              {MIX_CHANNELS.map((c) => {
+                const ch = b.channels[c];
+                return (
+                  <td key={c} className="num">
+                    {ch.not_implemented ? (
+                      <span className="small muted">아직 수집기 없음</span>
+                    ) : (
+                      <>
+                        {ch.count}
+                        {ch.min !== undefined && <span className="small muted"> / 최소 {ch.min}</span>}
+                        {ch.total !== undefined && ch.total > 0 && <span className="small muted"> / {ch.total}개 계정</span>}
+                        {ch.enough === false && <span className="badge b-warn" style={{ marginLeft: 6 }}>수집 부족</span>}
+                      </>
+                    )}
+                  </td>
+                );
+              })}
+              <td className="num">{b.access_unavailable}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {mix.brands.some((b) => b.press_over_warning) && (
+        <div className="mt12">
+          <Notice tone="warn">
+            {mix.brands.filter((b) => b.press_over_warning).map((b) => `${b.brand_name} 언론 비중 ${Math.round(b.press_ratio * 100)}%`).join(" · ")} — 언론 기사가 40%를 넘습니다. 다른 채널로 더 찾아보세요.
+          </Notice>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -103,6 +168,7 @@ export default function ResearchPage() {
   const { project, meta, brandName, reload: reloadProject } = useProject();
   const pid = project?.id;
   const { data: plan, reload } = useApi<ResearchPlan>(pid ? `/projects/${pid}/research-plan` : null);
+  const { data: mix } = useApi<CollectionMix>(pid ? `/projects/${pid}/collection-mix` : null);
   const action = useAction();
   const [jobId, setJobId] = useState<string | null>(null);
   const [runTotal, setRunTotal] = useState(0);
@@ -380,6 +446,8 @@ export default function ResearchPage() {
         )}
         <ErrorBox error={action.error} />
       </section>
+
+      <CollectionMixCard mix={mix} />
 
       {meta.scope.parts.map((part) => {
         const entries = plan.scope.filter((e) => specOf[e.item_id]?.part === part.id);

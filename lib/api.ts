@@ -209,6 +209,18 @@ export type Outline = { flow: (OutlineSlide | OutlineSection)[]; pages: number; 
 
 export type ResearchPlan = { id: string; version: number; confirmed_at: string | null; scope: ScopeEntry[]; items: ResearchItem[] };
 
+// Phase 1-4: 브랜드 × 채널별 수집 현황.
+export type CollectionMixChannel = { count: number; label: string; enough?: boolean; total?: number; min?: number; action?: string; not_implemented?: boolean };
+export type CollectionMixBrand = {
+  brand_id: string;
+  brand_name: string;
+  channels: Record<"press" | "owned" | "influencer" | "cafe_blog" | "community" | "review", CollectionMixChannel>;
+  access_unavailable: number;
+  press_ratio: number;
+  press_over_warning: boolean;
+};
+export type CollectionMix = { brands: CollectionMixBrand[] };
+
 export type Part = { type: "text" | "fact" | "meta" | "date" | "name" | "link"; text?: string | null; display?: string | null; fact_id?: string | null; formatter?: string | null; href?: string | null; bold?: boolean };
 
 export type Claim = { id: string; kind: "fact" | "interpretation" | "recommendation"; parts: Part[]; text: string; fact_ids: string[]; author: string; quote?: string | null; review_status: "pending" | "accepted" | "excluded" | "stale"; stale_reason: string | null; version: number; issues: string[] };
