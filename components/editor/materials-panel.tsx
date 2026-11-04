@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { CroppedImage } from "@/components/crop";
 import { MaterialStudio } from "@/components/material-studio";
-import { api, type Job, type Material } from "@/lib/api";
+import { ApiError, api, type Job, type Material } from "@/lib/api";
 import { useAction, useApi } from "@/lib/hooks";
 import type { Slide } from "./types";
 
@@ -61,7 +61,19 @@ export function MaterialsPanel({ projectId, slide, slides, stale }: { projectId:
   // A new draft picks the material up; speaker notes carry over by slide id, canvas edits do not.
   const rebuild = () =>
     action.run(async () => {
-      const r = await api.post<{ job: Job; deck_id: string }>(`/projects/${projectId}/deck-builds`, {}, { "Idempotency-Key": `editor-${Date.now()}` });
+      const post = (confirmPending?: boolean) =>
+        api.post<{ job: Job; deck_id: string }>(`/projects/${projectId}/deck-builds`, confirmPending ? { confirm_pending: true } : {},
+          { "Idempotency-Key": `editor-${Date.now()}` });
+      let r;
+      try {
+        r = await post();
+      } catch (e) {
+        const err = e as ApiError;
+        if (err.code !== "PENDING_REVIEW") throw e;
+        const pending = (err.detail as { pending: number }).pending;
+        if (!window.confirm(`확인 대기 ${pending}건이 있습니다. 그래도 만들까요?`)) return;
+        r = await post(true);
+      }
       for (let i = 0; i < 90; i++) {
         const j = await api.get<Job>(`/jobs/${r.job.id}`);
         if (j.state === "succeeded") return router.push(`/editor/${r.deck_id}`);

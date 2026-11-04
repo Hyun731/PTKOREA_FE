@@ -63,9 +63,10 @@ export default function OutputPage() {
   const refresh = async () => {
     await Promise.all([reload(), reloadDecks()]);
   };
-  const startBuild = () =>
+  const startBuild = (confirmPending = false) =>
     action.run(async () => {
-      const r = await api.post<{ job: Job }>(`/projects/${pid}/deck-builds`, undefined, { "Idempotency-Key": `build-${pid}-${Date.now()}` });
+      const r = await api.post<{ job: Job }>(`/projects/${pid}/deck-builds`, confirmPending ? { confirm_pending: true } : undefined,
+        { "Idempotency-Key": `build-${pid}-${Date.now()}` });
       setBuildJob(r.job.id);
       await reloadDecks();
     }, "초안 생성을 시작했습니다. 화면을 닫아도 계속 진행됩니다");
@@ -96,7 +97,20 @@ export default function OutputPage() {
       <div className="row wrap" style={{ gap: 8 }}>
         <RecollectButton pid={pid} itemIds={plan.plan.flatMap((s) => (s.readiness === "needs_input" ? s.item_ids ?? [] : []))} onDone={() => void reload()} />
       </div>
-      <ErrorBox error={action.error} />
+      <ErrorBox error={action.error?.code === "PENDING_REVIEW" ? null : action.error} />
+      {action.error?.code === "PENDING_REVIEW" && (
+        <Notice tone="warn">
+          확인 대기 {(action.error.detail as { pending: number }).pending}건이 있습니다. 그래도 만들까요?
+          <div className="row wrap mt8" style={{ gap: 8 }}>
+            <Link href={`/projects/${pid}/materials`} className="btn sm">
+              확인하러 가기
+            </Link>
+            <button className="btn sm primary" disabled={action.busy} onClick={() => startBuild(true)}>
+              그대로 만들기
+            </button>
+          </div>
+        </Notice>
+      )}
 
       {/* Step A */}
       <section className="card" aria-labelledby="s-a">
@@ -206,7 +220,7 @@ export default function OutputPage() {
             <h2 id="s-b">② 초안 생성 · 미리보기</h2>
             <p>실제 PPTX를 렌더한 미리보기입니다.</p>
           </div>
-          <button className="btn primary" onClick={startBuild} disabled={action.busy || building}>
+          <button className="btn primary" onClick={() => startBuild()} disabled={action.busy || building}>
             {building ? "만드는 중…" : shown ? "초안 다시 만들기" : "초안 만들기"}
           </button>
         </div>
