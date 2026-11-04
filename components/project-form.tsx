@@ -2,14 +2,14 @@
 
 import { useState } from "react";
 import { Field } from "@/components/ui";
-import type { Brand, Meta, OfficialProfile, ProjectConfig } from "@/lib/api";
+import type { Brand, HeroProduct, Meta, OfficialProfile, ProjectConfig } from "@/lib/api";
 
 export type ProjectDraft = Pick<ProjectConfig, "name" | "client" | "period" | "brands" | "collection_cutoff" | "target_hypothesis">;
 
 const split = (s: string) => s.split(",").map((x) => x.trim()).filter(Boolean);
 
 export function emptyBrand(i: number): Brand {
-  return { id: `B${i + 1}`, name: "", aliases: [], categories: [], target: { age_min: null, age_max: null, gender: "all", label: "" }, competitors: [], benchmarks: [], keyword_groups: [], industry: null, official_profiles: [], competitor_profiles: {} };
+  return { id: `B${i + 1}`, name: "", aliases: [], categories: [], target: { age_min: null, age_max: null, gender: "all", label: "" }, competitors: [], benchmarks: [], keyword_groups: [], industry: null, official_profiles: [], competitor_profiles: {}, hero_products: [], competitor_hero_products: {} };
 }
 
 function ListInput({ id, describedBy, value, onChange, max, placeholder }: { id: string; describedBy?: string; value: string[]; onChange: (v: string[]) => void; max?: number; placeholder?: string }) {
@@ -150,6 +150,77 @@ function OfficialAccountsRows({ brand, meta, onChange }: { brand: Brand; meta: M
   );
 }
 
+// 대표 상품 한 줄: 후보는 채택/아님, 직접 추가는 바로 confirmed로(최대 3개).
+function HeroProductEditor({ products, onChange }: { products: HeroProduct[]; onChange: (v: HeroProduct[]) => void }) {
+  const [draft, setDraft] = useState("");
+  const confirmedCount = products.filter((p) => p.status === "confirmed").length;
+  const add = () => {
+    if (!draft.trim()) return;
+    onChange([...products, { name: draft.trim(), status: "confirmed" }]);
+    setDraft("");
+  };
+  return (
+    <div className="stack" style={{ gap: 6 }}>
+      {products.map((p) =>
+        p.status === "candidate" ? (
+          <div className="row" key={p.name} style={{ gap: 8 }}>
+            <span className="grow small">AI 추천: {p.name}</span>
+            <button type="button" className="btn sm ok" onClick={() => onChange(products.map((x) => (x.name === p.name ? { ...x, status: "confirmed" as const } : x)))}>
+              채택
+            </button>
+            <button type="button" className="btn sm ghost" onClick={() => onChange(products.filter((x) => x.name !== p.name))}>
+              아님
+            </button>
+          </div>
+        ) : (
+          <div className="row" key={p.name} style={{ gap: 8 }}>
+            <span className="grow small">{p.name}</span>
+            <button type="button" className="btn sm ghost" onClick={() => onChange(products.filter((x) => x.name !== p.name))}>
+              삭제
+            </button>
+          </div>
+        )
+      )}
+      {confirmedCount < 3 && (
+        <div className="row" style={{ gap: 8 }}>
+          <input className="grow" placeholder="상품명 직접 추가(최대 3개)" value={draft} onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                add();
+              }
+            }} />
+          <button type="button" className="btn sm ghost" disabled={!draft.trim()} onClick={add}>
+            추가
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// 자사와 경쟁사의 대표 상품(Phase 2 커머스 리뷰가 이 상품으로 판매 플랫폼 리뷰를 모은다).
+function HeroProductsRows({ brand, onChange }: { brand: Brand; meta?: Meta | null; onChange: (b: Brand) => void }) {
+  const names = [brand.name, ...brand.competitors].filter(Boolean);
+  if (names.length === 0) return null;
+  const productsFor = (n: string) => (n === brand.name ? brand.hero_products ?? [] : brand.competitor_hero_products?.[n] ?? []);
+  const setProductsFor = (n: string, list: HeroProduct[]) =>
+    n === brand.name ? onChange({ ...brand, hero_products: list })
+                     : onChange({ ...brand, competitor_hero_products: { ...(brand.competitor_hero_products ?? {}), [n]: list } });
+  return (
+    <div className="mt8">
+      <p className="small muted">대표 상품 — 비워 두면 저장할 때 AI가 후보를 찾습니다. 후보는 채택해야 리뷰 수집에 쓰입니다(최대 3개).</p>
+      <div className="frows mt8">
+        {names.map((n) => (
+          <Field key={n} row label={n} impact="brand.hero_products">
+            {() => <HeroProductEditor products={productsFor(n)} onChange={(v) => setProductsFor(n, v)} />}
+          </Field>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function BrandEditor({ brand, onChange, onRemove, index, meta }: { brand: Brand; onChange: (b: Brand) => void; onRemove?: () => void; index: number; meta: Meta | null }) {
   const t = brand.target ?? { age_min: null, age_max: null, gender: "all" as const, label: "" };
   return (
@@ -216,6 +287,7 @@ function BrandEditor({ brand, onChange, onRemove, index, meta }: { brand: Brand;
         </div>
         <AliasRows brand={brand} onChange={onChange} />
         <OfficialAccountsRows brand={brand} meta={meta} onChange={onChange} />
+        <HeroProductsRows brand={brand} onChange={onChange} />
       </details>
     </section>
   );

@@ -58,6 +58,9 @@ export const fileUrl = (path: string) => `${API_URL}${path}`;
 // confirmed: 사람이 확인·입력함 · candidate: AI가 찾아 사람 확인 대기 · none: '이 채널 운영 안 함'으로 확인함.
 export type OfficialProfile = { channel: string; url: string; status: "confirmed" | "candidate" | "none" };
 
+// Phase 2 커머스 리뷰 — 플랫폼 리뷰를 모을 대표 상품(최대 3개). confirmed만 수집에 쓰인다.
+export type HeroProduct = { name: string; status: "confirmed" | "candidate" };
+
 export type Brand = {
   id: string;
   name: string;
@@ -74,6 +77,9 @@ export type Brand = {
   official_profiles?: OfficialProfile[];
   // 경쟁사는 Brand를 따로 안 두므로, 경쟁사 공식 계정은 이름으로 여기에 보관한다.
   competitor_profiles?: Record<string, OfficialProfile[]>;
+  hero_products?: HeroProduct[];
+  // 경쟁사는 Brand를 따로 안 두므로, 경쟁사 대표 상품도 이름으로 여기에 보관한다.
+  competitor_hero_products?: Record<string, HeroProduct[]>;
 };
 
 export type SectionWindow = { section_id: string; label: string; start: string; end: string; source: string };
