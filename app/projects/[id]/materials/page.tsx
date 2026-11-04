@@ -8,7 +8,7 @@ import { ImpactPanel, ImpactZone } from "@/components/impact";
 import { MaterialStudio } from "@/components/material-studio";
 import { useProject } from "@/components/project-context";
 import { Dialog, ErrorBox, Field, FileButton, PageIntro, Status, fmtDate } from "@/components/ui";
-import { api, fileUrl, type Batch, type Material, type ProjectConfig, type ResearchPlan } from "@/lib/api";
+import { api, fileUrl, type Batch, type Material, type ProjectConfig, type ResearchPlan, type ReviewSnapshot } from "@/lib/api";
 import { useAction, useApi } from "@/lib/hooks";
 
 function CsvSection({ pid, onChanged }: { pid: string; onChanged: () => void }) {
@@ -107,6 +107,109 @@ function CsvSection({ pid, onChanged }: { pid: string; onChanged: () => void }) 
           13행 게시물 샘플 불러오기
         </button>
       </details>
+    </section>
+  );
+}
+
+const PLATFORM_LABEL: Record<string, string> = { musinsa: "무신사", "29cm": "29CM", oliveyoung: "올리브영", smartstore: "스마트스토어", coupang: "쿠팡" };
+
+// Phase 2 커머스 리뷰: ReviewSnapshot/ReviewKeyword는 Material이 아니라 따로 쌓이므로 별도 섹션에서
+// 채택한다 — 채택해야 CM1·CM2 장표에 쓰인다(자동 채택 금지).
+function CommerceReviewSection({ pid, brandName, onChanged }: { pid: string; brandName: (id: string | null | undefined) => string; onChanged: () => void }) {
+  const { data: snapshots, reload } = useApi<ReviewSnapshot[]>(`/projects/${pid}/review-snapshots`);
+  const action = useAction();
+  if (!snapshots || snapshots.length === 0) return null;
+  const after = async () => {
+    await reload();
+    onChanged();
+  };
+  const reviewSnapshot = (id: string, status: "accepted" | "excluded") =>
+    action.run(async () => {
+      await api.patch(`/review-snapshots/${id}/review`, { status });
+      await after();
+    }, status === "accepted" ? "리뷰 스냅샷을 채택했습니다" : "리뷰 스냅샷을 뺐습니다");
+  const reviewKeyword = (id: string, status: "accepted" | "excluded") =>
+    action.run(async () => {
+      await api.patch(`/review-keywords/${id}/review`, { status });
+      await after();
+    }, status === "accepted" ? "키워드를 채택했습니다" : "키워드를 뺐습니다");
+  const waiting = snapshots.filter((s) => s.review_status === "candidate").length;
+  return (
+    <section className="card" aria-labelledby="review-title">
+      <div className="card-head">
+        <div className="grow">
+          <h2 id="review-title">커머스 리뷰</h2>
+          <p className="num">확인 전 {waiting} · 채택해야 CM1·CM2 장표에 쓰입니다</p>
+        </div>
+      </div>
+      <ErrorBox error={action.error} />
+      <ul className="list mt16">
+        {snapshots.map((s) => (
+          <li key={s.id}>
+            <div className="grow">
+              <div className="row wrap" style={{ gap: 8 }}>
+                <span className="title">
+                  {brandName(s.brand_id)} · {s.entity} · {PLATFORM_LABEL[s.platform] ?? s.platform}
+                </span>
+                <Status value={s.review_status} />
+              </div>
+              <div className="meta">{s.product_name}</div>
+              <div className="meta num">
+                {s.access_status === "ok"
+                  ? s.rating != null && s.review_count
+                    ? `평점 ${s.rating}/${s.rating_scale} (리뷰 ${s.review_count.toLocaleString()}건)`
+                    : "평점 미확보"
+                  : `접근 불가 — ${s.reason ?? ""}`}
+                {s.sponsored_count > 0 && ` · 체험단 ${s.sponsored_count}건 제외`}
+              </div>
+              {s.keywords.length > 0 && (
+                <ul className="mt8" style={{ listStyle: "none", padding: 0, margin: 0 }}>
+                  {s.keywords.map((k) => (
+                    <li key={k.id} className="row wrap mt8" style={{ gap: 8 }}>
+                      <span className={`badge ${k.sentiment === "positive" ? "b-ok" : "b-bad"}`}>{k.sentiment === "positive" ? "긍정" : "부정"}</span>
+                      <span className="small grow">
+                        {k.keyword} ({k.sample_size}건){k.blocks_purchase ? " · 구매 방해" : ""}
+                        {k.quotes[0] && (
+                          <>
+                            {" — “"}
+                            {k.quotes[0].text}
+                            {"” ("}
+                            {k.quotes[0].posted_at}
+                            {")"}
+                          </>
+                        )}
+                      </span>
+                      <Status value={k.review_status} />
+                      {k.review_status !== "accepted" && (
+                        <button className="btn sm ok" disabled={action.busy} onClick={() => reviewKeyword(k.id, "accepted")}>
+                          채택
+                        </button>
+                      )}
+                      {k.review_status !== "excluded" && (
+                        <button className="btn sm ghost" disabled={action.busy} onClick={() => reviewKeyword(k.id, "excluded")}>
+                          빼기
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div className="actions">
+              {s.review_status !== "accepted" && (
+                <button className="btn sm primary" disabled={action.busy} onClick={() => reviewSnapshot(s.id, "accepted")}>
+                  스냅샷 채택
+                </button>
+              )}
+              {s.review_status !== "excluded" && (
+                <button className="btn sm ghost" disabled={action.busy} onClick={() => reviewSnapshot(s.id, "excluded")}>
+                  빼기
+                </button>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }
@@ -427,6 +530,8 @@ function MaterialsInner() {
           </div>
         </details>
       </section>
+
+      <CommerceReviewSection pid={pid} brandName={brandName} onChanged={changed} />
 
       <CsvSection pid={pid} onChanged={changed} />
 

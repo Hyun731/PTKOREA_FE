@@ -289,6 +289,36 @@ export type Material = {
 
 export type Batch = { id: string; kind: "facts" | "posts"; filename: string; status: string; total_rows: number; valid_rows: number; errors: { row_no: number; column: string | null; code: string; message: string }[]; duplicates: unknown[]; synthetic: boolean; reviewed_by: string | null; created_at: string };
 
+// Phase 2 커머스 리뷰 — 판매 플랫폼 공개 페이지에서 모은 대표 상품 평점·리뷰 스냅샷(CM1/CM2).
+export type ReviewKeyword = {
+  id: string;
+  sentiment: "positive" | "negative";
+  keyword: string;
+  sample_size: number;
+  method: string;
+  quotes: { text: string; posted_at: string }[];
+  blocks_purchase: boolean;
+  review_status: "candidate" | "accepted" | "excluded";
+};
+export type ReviewSnapshot = {
+  id: string;
+  brand_id: string;
+  entity: string;
+  role: "self" | "competitor";
+  platform: string;
+  product_name: string;
+  product_url: string;
+  access_status: "ok" | "unavailable";
+  reason: string | null;
+  rating: number | null;
+  rating_scale: number;
+  review_count: number | null;
+  sponsored_count: number;
+  measured_at: string;
+  review_status: "candidate" | "accepted" | "excluded";
+  keywords: ReviewKeyword[];
+};
+
 export type QCIssue = { code: string; severity: "block" | "warn"; message: string; action: string; slide_id: string | null; block_id: string | null };
 export type QC = { blocks: number; warns: number; issues: QCIssue[] };
 
