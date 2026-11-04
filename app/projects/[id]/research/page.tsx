@@ -221,12 +221,13 @@ export default function ResearchPage() {
     Boolean(i.section_id === "campaign" || i.section_id === "market" ? providers.perplexity && has(i, "web") : i.section_id === "influencer" ? providers.scrapecreators && has(i, "instagram", "youtube") : false);
   const urlsOf = (i: ResearchItem) => i.inputs?.post_urls ?? [];
   const tagsOf = (i: ResearchItem) => i.inputs?.hashtags ?? [];
-  // An influencer item can run with chosen post URLs, hashtags to discover posts with, or both.
+  // An influencer item can run with chosen post URLs, hashtags, both, or neither — it searches by
+  // brand name on its own (Phase 1-2), so no input is required before the first automatic run.
   const hasInput = (i: ResearchItem) => urlsOf(i).length > 0 || tagsOf(i).length > 0;
   const ran = (i: ResearchItem) => ["succeeded", "partial", "needs_review"].includes(i.execution_status);
   // The search found nothing that names the subject: running it again as is would find nothing again.
   const noMaterial = (i: ResearchItem) => (i.last_result?.errors ?? []).some((e) => e.code === "NO_MATERIAL");
-  const ready = (i: ResearchItem) => i.selected && i.review_status !== "excluded" && canAuto(i) && !ran(i) && !noMaterial(i) && !itemBusy(i) && (i.section_id !== "influencer" || hasInput(i));
+  const ready = (i: ResearchItem) => i.selected && i.review_status !== "excluded" && canAuto(i) && !ran(i) && !noMaterial(i) && !itemBusy(i);
 
   const active = plan.items.filter((i) => i.selected && i.review_status !== "excluded");
   const excluded = plan.items.filter((i) => i.review_status === "excluded");
@@ -311,13 +312,7 @@ export default function ResearchPage() {
     const manual = !canAuto(i) && !["influencer", "search"].includes(i.section_id);
     let next: React.ReactNode = null;
     if (!isRunning) {
-      if (i.section_id === "influencer" && !hasInput(i))
-        next = (
-          <button className="btn sm primary" onClick={() => setEditing(i)}>
-            게시물 URL·해시태그 넣기
-          </button>
-        );
-      else if (noMaterial(i))
+      if (noMaterial(i))
         next = (
           <Link className="btn sm primary" href={`/projects/${pid}/setup`}>
             이름·다른 표기 고치기
@@ -358,6 +353,7 @@ export default function ResearchPage() {
             {i.review_status === "accepted" && <span className="badge b-ok">확인 완료</span>}
             {isRunning && <span className="badge b-brand">조사 중</span>}
             {!isRunning && noMaterial(i) && <span className="badge b-bad">자료 없음</span>}
+            {!isRunning && r.coverage_short && <span className="badge b-warn">수집 부족</span>}
           </div>
           {r.status && (
             <div className="meta">
@@ -379,9 +375,9 @@ export default function ResearchPage() {
               <Link className="btn sm ghost" href={`/projects/${pid}/materials?item=${i.id}`}>
                 자료 직접 작성
               </Link>
-              {i.section_id === "influencer" && urls.length > 0 && (
+              {i.section_id === "influencer" && (
                 <button className="btn sm ghost" onClick={() => setEditing(i)}>
-                  게시물 URL·해시태그 수정
+                  {urls.length > 0 ? "게시물 URL·해시태그 수정" : "게시물 URL·해시태그 직접 넣기"}
                 </button>
               )}
               {i.section_id !== "search" && (ran(i) || noMaterial(i)) && (

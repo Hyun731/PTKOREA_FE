@@ -193,6 +193,7 @@ export type ItemResult = {
   errors?: { code: string; message: string }[];
   reason?: string;
   at?: string;
+  coverage_short?: boolean;
 };
 
 export type Usage = { budget_per_run_usd: number; total_cost_usd: number; providers: Record<string, { calls: number; cache_hits: number; failed: number; cost_usd: number; estimated: boolean }> };
