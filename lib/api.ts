@@ -211,7 +211,7 @@ export type Outline = { flow: (OutlineSlide | OutlineSection)[]; pages: number; 
 export type ResearchPlan = { id: string; version: number; confirmed_at: string | null; scope: ScopeEntry[]; items: ResearchItem[] };
 
 // Phase 1-4: 브랜드 × 채널별 수집 현황.
-export type CollectionMixChannel = { count: number; label: string; enough?: boolean; total?: number; min?: number; action?: string; not_implemented?: boolean };
+export type CollectionMixChannel = { count: number; label: string; enough?: boolean; total?: number; min?: number; sites?: number; sites_min?: number; action?: string; not_implemented?: boolean };
 export type CollectionMixBrand = {
   brand_id: string;
   brand_name: string;

@@ -89,6 +89,7 @@ function CollectionMixCard({ mix }: { mix: CollectionMix | null }) {
                         {ch.count}
                         {ch.min !== undefined && <span className="small muted"> / 최소 {ch.min}</span>}
                         {ch.total !== undefined && ch.total > 0 && <span className="small muted"> / {ch.total}개 계정</span>}
+                        {ch.sites_min !== undefined && <span className="small muted"> · {ch.sites ?? 0}/{ch.sites_min}곳</span>}
                         {ch.enough === false && <span className="badge b-warn" style={{ marginLeft: 6 }}>수집 부족</span>}
                       </>
                     )}
@@ -218,7 +219,11 @@ export default function ResearchPage() {
   const itemBusy = (i: ResearchItem) => ["queued", "running"].includes(i.execution_status);
   const has = (i: ResearchItem, ...ids: string[]) => i.channels.some((c) => ids.includes(c.id));
   const canAuto = (i: ResearchItem) =>
-    Boolean(i.section_id === "campaign" || i.section_id === "market" ? providers.perplexity && has(i, "web") : i.section_id === "influencer" ? providers.scrapecreators && has(i, "instagram", "youtube") : false);
+    Boolean(
+      i.section_id === "campaign" || i.section_id === "market" ? providers.perplexity && has(i, "web") :
+      i.section_id === "influencer" ? providers.scrapecreators && has(i, "instagram", "youtube") :
+      i.section_id === "voc" ? providers.perplexity && has(i, "community", "naver_blog") : false,
+    );
   const urlsOf = (i: ResearchItem) => i.inputs?.post_urls ?? [];
   const tagsOf = (i: ResearchItem) => i.inputs?.hashtags ?? [];
   // An influencer item can run with chosen post URLs, hashtags, both, or neither — it searches by
