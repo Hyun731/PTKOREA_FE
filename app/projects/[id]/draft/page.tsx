@@ -6,8 +6,112 @@ import { ChatThread, type ChatMessage } from "@/components/chat";
 import { CauseAction, CauseBadge, RecollectButton } from "@/components/missing-cause";
 import { useProject } from "@/components/project-context";
 import { ErrorBox, PageIntro } from "@/components/ui";
-import { api, type Outline, type OutlineSlide } from "@/lib/api";
+import { api, type Brand, type Outline, type OutlineSlide, type SynthesisRun, type SynthesisType } from "@/lib/api";
 import { useAction, useApi } from "@/lib/hooks";
+
+const SYNTHESIS_TYPES: SynthesisType[] = ["swot", "insight", "problem"];
+const SYNTHESIS_TYPE_LABEL: Record<SynthesisType, string> = {
+  insight: "분석 요약과 인사이트",
+  swot: "경쟁사 대비 SWOT 요약",
+  problem: "문제 정의와 솔루션 방향",
+};
+
+function SynthesisPanel({ pid, brand, showBrandName, runs, onChanged }: { pid: string; brand: Brand; showBrandName: boolean; runs: SynthesisRun[]; onChanged: () => Promise<void> }) {
+  const active = runs.find((r) => r.active) ?? null;
+  const history = runs.filter((r) => !r.active).sort((a, b) => b.version - a.version);
+  const [selected, setSelected] = useState<SynthesisType[]>(active?.types ?? ["insight"]);
+  const [instruction, setInstruction] = useState("");
+  const act = useAction();
+
+  const toggle = (t: SynthesisType) => setSelected((s) => (s.includes(t) ? s.filter((x) => x !== t) : [...s, t]));
+  const write = () =>
+    act.run(
+      async () => {
+        const r = await api.post<SynthesisRun>(`/projects/${pid}/synthesis`, { brand_id: brand.id, types: selected, instruction });
+        setInstruction("");
+        await onChanged();
+        return r;
+      },
+      (r) => (r.dropped.length ? `종합 장표를 썼습니다(v${r.version}) · 규칙에 맞지 않는 ${r.dropped.length}줄은 뺐습니다` : `종합 장표를 썼습니다(v${r.version})`),
+    );
+  const clear = () =>
+    act.run(async () => {
+      await api.del(`/projects/${pid}/synthesis?brand_id=${encodeURIComponent(brand.id)}`);
+      await onChanged();
+    }, "종합 장표를 뺐습니다");
+  const activate = (runId: string, version: number) =>
+    act.run(async () => {
+      await api.post(`/synthesis-runs/${runId}/activate`, {});
+      await onChanged();
+    }, `v${version}으로 되돌렸습니다`);
+
+  return (
+    <div className="draft-summary">
+      <div>
+        <strong>{showBrandName ? `종합 장표 · ${brand.name}` : "종합 장표"}</strong>
+        <div className="small muted mt8">
+          {active
+            ? `v${active.version} · ${active.types.map((t) => SYNTHESIS_TYPE_LABEL[t]).join(" · ")}`
+            : "본문 장표의 헤드라인으로 Executive Summary 등 종합 장표를 씁니다. 새 숫자는 넣지 않습니다."}
+        </div>
+        {active?.stale && <span className="badge b-warn mt8">본문이 바뀌었습니다, 다시 쓰기를 권합니다</span>}
+      </div>
+
+      <div className="synth-types" role="group" aria-label="종합 장표 유형 선택(여러 개를 고르면 고른 순서대로 만듭니다)">
+        {SYNTHESIS_TYPES.map((t) => {
+          const i = selected.indexOf(t);
+          return (
+            <button key={t} type="button" className={`chip ${i >= 0 ? "on" : ""}`} aria-pressed={i >= 0} onClick={() => toggle(t)}>
+              {selected.length > 1 && i >= 0 && <span className="num">{i + 1}</span>}
+              {SYNTHESIS_TYPE_LABEL[t]}
+            </button>
+          );
+        })}
+      </div>
+
+      <input aria-label="종합 장표에 바라는 점" placeholder="바라는 점이 있으면 (예: 검색 경쟁을 과제로 앞세워 줘)" value={instruction}
+        onChange={(e) => setInstruction(e.target.value)} />
+
+      <div className="actions">
+        <button className="btn sm primary" disabled={act.busy || selected.length === 0} onClick={write}>
+          {act.busy ? "쓰는 중…" : active ? "다시 쓰기" : "종합 장표 만들기"}
+        </button>
+        {active && (
+          <button className="btn sm ghost" disabled={act.busy} onClick={clear}>
+            빼기
+          </button>
+        )}
+      </div>
+      <ErrorBox error={act.error} />
+
+      {(active || history.length > 0) && (
+        <details className="more">
+          <summary>버전 기록 ({runs.length})</summary>
+          <ul className="list mt8">
+            {[...(active ? [active] : []), ...history].map((r) => (
+              <li key={r.id}>
+                <div className="grow">
+                  <div className="title">
+                    v{r.version} {r.active && <span className="badge b-brand">현재</span>}
+                  </div>
+                  <div className="meta">
+                    {r.types.map((t) => SYNTHESIS_TYPE_LABEL[t]).join(" · ")}
+                    {r.instruction && ` · "${r.instruction}"`}
+                  </div>
+                </div>
+                {!r.active && (
+                  <button className="btn sm" disabled={act.busy} onClick={() => activate(r.id, r.version)}>
+                    되돌리기
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </div>
+  );
+}
 
 // What each calculation rule found, in words (shown under the draft: they feed headlines and Recap).
 const RULE_LABEL: Record<string, string> = {
@@ -25,11 +129,11 @@ export default function DraftPage() {
   const { project, plan, brandName, reload: reloadProject } = useProject();
   const pid = project?.id;
   const { data: outline, reload, error } = useApi<Outline>(pid ? `/projects/${pid}/outline` : null);
+  const { data: synthesisRuns, reload: reloadSynthesis } = useApi<SynthesisRun[]>(pid ? `/projects/${pid}/synthesis` : null);
   // Kept as picked, so the conversation stays visible after its slide is taken out.
   const [picked, setPicked] = useState<{ slide_id: string; title: string; page_no: number | null } | null>(null);
   const selected = picked?.slide_id ?? null;
   const [threads, setThreads] = useState<Record<string, ChatMessage[]>>({});
-  const [summaryNote, setSummaryNote] = useState("");
   const chat = useAction();
   const action = useAction();
 
@@ -39,7 +143,7 @@ export default function DraftPage() {
   const current = live ?? picked;
   const messages = (selected && threads[selected]) || [];
   const refresh = async () => {
-    await Promise.all([reload(), reloadProject()]);
+    await Promise.all([reload(), reloadProject(), reloadSynthesis()]);
   };
   const send = (message: string) => {
     if (!live) return;
@@ -58,22 +162,6 @@ export default function DraftPage() {
       await api.del(`/projects/${pid}/lead-overrides/${encodeURIComponent(s.slide_id)}`);
       await refresh();
     }, "원래 헤드라인으로 돌렸습니다");
-  const hasSummary = slides.some((s) => s.slide_id === "ES" || s.slide_id === "SWOT" || s.slide_id === "NEXT");
-  const writeSummary = () =>
-    action.run(
-      async () => {
-        const r = await api.post<{ dropped: string[] }>(`/projects/${pid}/synthesis`, { instruction: summaryNote });
-        setSummaryNote("");
-        await refresh();
-        return r;
-      },
-      (r) => (r.dropped.length ? `종합 장표를 썼습니다 · 규칙에 맞지 않는 ${r.dropped.length}줄은 뺐습니다` : "종합 장표를 썼습니다"),
-    );
-  const clearSummary = () =>
-    action.run(async () => {
-      await api.del(`/projects/${pid}/synthesis`);
-      await refresh();
-    }, "종합 장표를 뺐습니다");
   const restore = (slotId: string) =>
     action.run(async () => {
       await api.del(`/projects/${pid}/slot-omissions/${encodeURIComponent(slotId)}`);
@@ -116,28 +204,20 @@ export default function DraftPage() {
           </aside>
 
           <article className="draft-doc" aria-label="초안 흐름">
-            <div className="draft-summary">
-              <div className="grow">
-                <strong>종합 장표</strong>
-                <div className="small muted">
-                  {hasSummary
-                    ? "Executive Summary(맨 앞)와 SWOT·다음 단계(종합)가 들어 있습니다. 본문이 바뀌면 다시 쓰세요."
-                    : "본문 장표의 헤드라인으로 Executive Summary, SWOT, 다음 단계 장을 씁니다. 새 숫자는 넣지 않습니다."}
-                </div>
-                <input className="mt8" aria-label="종합 장표에 바라는 점" placeholder="바라는 점이 있으면 (예: 검색 경쟁을 과제로 앞세워 줘)" value={summaryNote}
-                  onChange={(e) => setSummaryNote(e.target.value)} />
-              </div>
-              <div className="actions">
-                <button className="btn sm primary" disabled={action.busy} onClick={writeSummary}>
-                  {action.busy ? "쓰는 중…" : hasSummary ? "다시 쓰기" : "종합 장표 만들기"}
-                </button>
-                {hasSummary && (
-                  <button className="btn sm ghost" disabled={action.busy} onClick={clearSummary}>
-                    빼기
-                  </button>
-                )}
-              </div>
-            </div>
+            {project?.config.brands.map((b) => {
+              const brandRuns = (synthesisRuns ?? []).filter((r) => r.brand_id === b.id);
+              return (
+                <SynthesisPanel
+                  // Remount when the active version changes, so the type chips reflect it again (되돌리기 포함).
+                  key={`${b.id}:${brandRuns.find((r) => r.active)?.id ?? "none"}`}
+                  pid={pid}
+                  brand={b}
+                  showBrandName={project.config.brands.length > 1}
+                  runs={brandRuns}
+                  onChanged={refresh}
+                />
+              );
+            })}
             <p className="small muted num">
               전체 {outline.pages}쪽 · 본문 {slides.length}장{outline.missing.length > 0 && ` · 자료가 없어 빠진 장표 ${outline.missing.length}개`}
             </p>

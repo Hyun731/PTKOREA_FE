@@ -208,6 +208,22 @@ export type MissingCause = "adopt" | "collect" | "setup" | "upload" | "access";
 export type MissingSlot = { slot_id: string; label: string; reason: string | null; cause: MissingCause | null; action: string | null; item_ids: string[] };
 export type Outline = { flow: (OutlineSlide | OutlineSection)[]; pages: number; missing: MissingSlot[]; omitted: { slot_id: string; label: string; reason: string | null }[]; fingerprint: string };
 
+// 종합 장표(Phase 3-1): 자사 브랜드마다, 고른 유형마다, 버전마다 따로 남는다.
+export type SynthesisType = "insight" | "swot" | "problem";
+export type SynthesisRun = {
+  id: string;
+  project_id: string;
+  brand_id: string;
+  version: number;
+  types: SynthesisType[];
+  data: Record<string, unknown>;
+  instruction: string;
+  dropped: string[];
+  active: boolean;
+  stale: boolean;
+  created_at: string;
+};
+
 export type ResearchPlan = { id: string; version: number; confirmed_at: string | null; scope: ScopeEntry[]; items: ResearchItem[] };
 
 // Phase 1-4: 브랜드 × 채널별 수집 현황.
