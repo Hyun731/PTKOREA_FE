@@ -61,6 +61,10 @@ export type OfficialProfile = { channel: string; url: string; status: "confirmed
 // Phase 2 커머스 리뷰 — 플랫폼 리뷰를 모을 대표 상품(최대 3개). confirmed만 수집에 쓰인다.
 export type HeroProduct = { name: string; status: "confirmed" | "candidate" };
 
+// 피드백 #1(업종별 variation) — 시장 조사(3-1) 검색에 덧붙는 업종 특화 키워드. confirmed만 쓰인다.
+// 프로필이 있는 업종(meta.industries[].has_keyword_profile)은 코드로 이미 확정돼 있어 후보가 없다.
+export type IndustryKeywordHint = { text: string; status: "confirmed" | "candidate" };
+
 export type Brand = {
   id: string;
   name: string;
@@ -80,6 +84,7 @@ export type Brand = {
   hero_products?: HeroProduct[];
   // 경쟁사는 Brand를 따로 안 두므로, 경쟁사 대표 상품도 이름으로 여기에 보관한다.
   competitor_hero_products?: Record<string, HeroProduct[]>;
+  industry_keywords?: IndustryKeywordHint[];
 };
 
 export type SectionWindow = { section_id: string; label: string; start: string; end: string; source: string };
@@ -353,6 +358,6 @@ export type Meta = {
   providers: Record<string, boolean>;
   manual_metrics: string[];
   render_backend: string;
-  industries: { id: string; types: string[]; review_required: boolean }[];
+  industries: { id: string; types: string[]; review_required: boolean; has_keyword_profile: boolean }[];
   official_channels: { id: string; label: string; auto_collect: boolean }[];
 };

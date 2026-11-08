@@ -2,14 +2,14 @@
 
 import { useState } from "react";
 import { Field } from "@/components/ui";
-import type { Brand, HeroProduct, Meta, OfficialProfile, ProjectConfig } from "@/lib/api";
+import type { Brand, HeroProduct, IndustryKeywordHint, Meta, OfficialProfile, ProjectConfig } from "@/lib/api";
 
 export type ProjectDraft = Pick<ProjectConfig, "name" | "client" | "period" | "brands" | "collection_cutoff" | "target_hypothesis">;
 
 const split = (s: string) => s.split(",").map((x) => x.trim()).filter(Boolean);
 
 export function emptyBrand(i: number): Brand {
-  return { id: `B${i + 1}`, name: "", aliases: [], categories: [], target: { age_min: null, age_max: null, gender: "all", label: "" }, competitors: [], benchmarks: [], keyword_groups: [], industry: null, official_profiles: [], competitor_profiles: {}, hero_products: [], competitor_hero_products: {} };
+  return { id: `B${i + 1}`, name: "", aliases: [], categories: [], target: { age_min: null, age_max: null, gender: "all", label: "" }, competitors: [], benchmarks: [], keyword_groups: [], industry: null, official_profiles: [], competitor_profiles: {}, hero_products: [], competitor_hero_products: {}, industry_keywords: [] };
 }
 
 function ListInput({ id, describedBy, value, onChange, max, placeholder }: { id: string; describedBy?: string; value: string[]; onChange: (v: string[]) => void; max?: number; placeholder?: string }) {
@@ -221,6 +221,68 @@ function HeroProductsRows({ brand, onChange }: { brand: Brand; meta?: Meta | nul
   );
 }
 
+// 피드백 #1(업종별 variation): 프로필 없는 업종만 후보가 생긴다 — 채택/아님, 직접 추가 가능.
+function IndustryKeywordsEditor({ hints, onChange }: { hints: IndustryKeywordHint[]; onChange: (v: IndustryKeywordHint[]) => void }) {
+  const [draft, setDraft] = useState("");
+  const add = () => {
+    if (!draft.trim()) return;
+    onChange([...hints, { text: draft.trim(), status: "confirmed" }]);
+    setDraft("");
+  };
+  return (
+    <div className="stack" style={{ gap: 6 }}>
+      {hints.map((k, i) =>
+        k.status === "candidate" ? (
+          <div className="row" key={`${k.text}-${i}`} style={{ gap: 8 }}>
+            <span className="grow small">AI 추천: {k.text}</span>
+            <button type="button" className="btn sm ok" onClick={() => onChange(hints.map((x, xi) => (xi === i ? { ...x, status: "confirmed" as const } : x)))}>
+              채택
+            </button>
+            <button type="button" className="btn sm ghost" onClick={() => onChange(hints.filter((_, xi) => xi !== i))}>
+              아님
+            </button>
+          </div>
+        ) : (
+          <div className="row" key={`${k.text}-${i}`} style={{ gap: 8 }}>
+            <span className="grow small">{k.text}</span>
+            <button type="button" className="btn sm ghost" onClick={() => onChange(hints.filter((_, xi) => xi !== i))}>
+              삭제
+            </button>
+          </div>
+        )
+      )}
+      <div className="row" style={{ gap: 8 }}>
+        <input className="grow" placeholder="키워드 직접 추가" value={draft} onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              add();
+            }
+          }} />
+        <button type="button" className="btn sm ghost" disabled={!draft.trim()} onClick={add}>
+          추가
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function IndustryKeywordsRow({ brand, meta, onChange }: { brand: Brand; meta: Meta | null; onChange: (b: Brand) => void }) {
+  if (!brand.industry) return null; // 업종이 아직 없으면 보여줄 것도 없다
+  const info = meta?.industries.find((i) => i.id === brand.industry);
+  if (info?.has_keyword_profile) return null; // 프로필이 있으면 키워드가 코드로 이미 확정됨 — 확인 UI 불필요
+  return (
+    <div className="mt8">
+      <p className="small muted">업종 특화 키워드 — 시장 조사(3-1) 검색에 덧붙습니다. 후보는 채택해야 쓰입니다.</p>
+      <div className="frows mt8">
+        <Field row label={brand.industry} impact="brand.industry_keywords">
+          {() => <IndustryKeywordsEditor hints={brand.industry_keywords ?? []} onChange={(v) => onChange({ ...brand, industry_keywords: v })} />}
+        </Field>
+      </div>
+    </div>
+  );
+}
+
 function BrandEditor({ brand, onChange, onRemove, index, meta }: { brand: Brand; onChange: (b: Brand) => void; onRemove?: () => void; index: number; meta: Meta | null }) {
   const t = brand.target ?? { age_min: null, age_max: null, gender: "all" as const, label: "" };
   return (
@@ -288,6 +350,7 @@ function BrandEditor({ brand, onChange, onRemove, index, meta }: { brand: Brand;
         <AliasRows brand={brand} onChange={onChange} />
         <OfficialAccountsRows brand={brand} meta={meta} onChange={onChange} />
         <HeroProductsRows brand={brand} onChange={onChange} />
+        <IndustryKeywordsRow brand={brand} meta={meta} onChange={onChange} />
       </details>
     </section>
   );
