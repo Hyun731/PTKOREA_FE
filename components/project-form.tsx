@@ -118,10 +118,21 @@ function OfficialAccountsRows({ brand, meta, onChange }: { brand: Brand; meta: M
   const names = [brand.name, ...brand.competitors].filter(Boolean);
   const channels = meta?.official_channels ?? [];
   if (names.length === 0 || channels.length === 0) return null;
+  // 피드백 #4: 1순위(네이버 블로그·유튜브·인스타그램)는 바로 보이고, 2순위(페이스북·X·스레드·틱톡·기타)는 더보기.
+  const primary = channels.filter((c) => c.tier === "primary");
+  const secondary = channels.filter((c) => c.tier !== "primary");
   const profilesFor = (n: string) => (n === brand.name ? brand.official_profiles ?? [] : brand.competitor_profiles?.[n] ?? []);
   const setProfilesFor = (n: string, list: OfficialProfile[]) =>
     n === brand.name ? onChange({ ...brand, official_profiles: list })
                      : onChange({ ...brand, competitor_profiles: { ...(brand.competitor_profiles ?? {}), [n]: list } });
+  const row = (n: string, profiles: OfficialProfile[], c: Meta["official_channels"][number]) => (
+    <OfficialProfileRow key={c.id} channel={c.id} label={c.label} autoCollect={c.auto_collect}
+      profile={profiles.find((p) => p.channel === c.id)}
+      onChange={(next) => {
+        const rest = profiles.filter((p) => p.channel !== c.id);
+        setProfilesFor(n, next ? [...rest, next] : rest);
+      }} />
+  );
   return (
     <div className="mt8">
       <p className="small muted">공식 계정 — 비워 두면 저장할 때 AI가 후보를 찾습니다. 후보는 체크해야 수집에 쓰입니다.</p>
@@ -132,14 +143,15 @@ function OfficialAccountsRows({ brand, meta, onChange }: { brand: Brand; meta: M
             <Field key={n} row label={n} impact="brand.official_accounts">
               {() => (
                 <div className="stack" style={{ gap: 6 }}>
-                  {channels.map((c) => (
-                    <OfficialProfileRow key={c.id} channel={c.id} label={c.label} autoCollect={c.auto_collect}
-                      profile={profiles.find((p) => p.channel === c.id)}
-                      onChange={(next) => {
-                        const rest = profiles.filter((p) => p.channel !== c.id);
-                        setProfilesFor(n, next ? [...rest, next] : rest);
-                      }} />
-                  ))}
+                  {primary.map((c) => row(n, profiles, c))}
+                  {secondary.length > 0 && (
+                    <details className="more">
+                      <summary>다른 채널 (페이스북·X·스레드·틱톡·기타)</summary>
+                      <div className="stack mt8" style={{ gap: 6 }}>
+                        {secondary.map((c) => row(n, profiles, c))}
+                      </div>
+                    </details>
+                  )}
                 </div>
               )}
             </Field>

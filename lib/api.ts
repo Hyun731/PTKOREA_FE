@@ -359,5 +359,5 @@ export type Meta = {
   manual_metrics: string[];
   render_backend: string;
   industries: { id: string; types: string[]; review_required: boolean; has_keyword_profile: boolean }[];
-  official_channels: { id: string; label: string; auto_collect: boolean }[];
+  official_channels: { id: string; label: string; auto_collect: boolean; tier: "primary" | "secondary" }[];
 };
