@@ -53,7 +53,21 @@ export type TableBlock = {
   header_height: number;
   row_height: number;
 };
-export type BarChartBlock = { kind: "bar_chart"; block_id: string; region: Region; items: { entity: string; label: string; fact_id: string; display: string; value: number; role: string }[]; label_size: number };
+export type BarItem = { entity: string; label: string; fact_id: string; display: string; value: number; role: string; formatter?: string };
+/** One series of a grouped/stacked bar chart; `items` line up with `categories`, null = no value (empty slot). */
+export type BarSeries = { name: string; role: string; color?: string | null; items: (BarItem | null)[] };
+export type BarChartBlock = {
+  kind: "bar_chart";
+  block_id: string;
+  region: Region;
+  /** Single series (one bar per item). Empty when `series` is used. */
+  items: BarItem[];
+  categories?: string[];
+  series?: BarSeries[];
+  orientation?: "h" | "v";
+  stacked?: boolean;
+  label_size: number;
+};
 export type LineChartBlock = { kind: "line_chart"; block_id: string; region: Region; categories: string[]; series: { entity: string; role: string; points: { month: string; value: number | null }[] }[] };
 
 export type Block = TextBlock | ShapeBlock | ImageBlock | TableBlock | BarChartBlock | LineChartBlock;
