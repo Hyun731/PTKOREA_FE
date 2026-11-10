@@ -203,7 +203,95 @@ function TableView({ b, tokens }: { b: TableBlock; tokens: Tokens }) {
   );
 }
 
+const STACK_LABEL_MIN = 0.08; // same rule as the PPTX renderer: thinner stacked segments get no label
+
+function isDark(hex: string): boolean {
+  const n = parseInt(hex.replace("#", ""), 16);
+  return 0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255) < 140;
+}
+
+/** Grouped or stacked bars (horizontal or vertical), mirroring core/rendering/pptx_renderer._bar_chart_multi. */
+function MultiBarChartView({ b, tokens }: { b: Extract<Block, { kind: "bar_chart" }>; tokens: Tokens }) {
+  const r = b.region;
+  const cats = b.categories ?? [];
+  const series = b.series ?? [];
+  const stacked = !!b.stacked;
+  const vertical = b.orientation === "v";
+  const fs = b.label_size * PT;
+  const legendH = series.length > 1 ? 22 : 0;
+  const sums = cats.map((_, i) => series.reduce((a, s) => a + (s.items[i]?.value ?? 0), 0));
+  const maxVal = Math.max(1e-9, ...series.flatMap((s) => s.items.map((it) => it?.value ?? 0)));
+  const top = stacked ? Math.max(1e-9, ...sums) * 1.04 : maxVal * 1.15;
+  const fill = (s: (typeof series)[number]) => colorOf(tokens, s.color || BAR_ROLE[s.role] || "bar_other");
+  const labelW = vertical ? 0 : Math.min(150, r.w * 0.25);
+  const axisH = vertical ? 22 : 0;
+  const plotW = r.w - labelW - (vertical ? 0 : 8);
+  const plotH = r.h - legendH - axisH;
+  const band = (vertical ? plotW : plotH) / Math.max(1, cats.length);
+  const thick = stacked ? band * (vertical ? 0.5 : 0.64) : (band * (vertical ? 0.7 : 0.64)) / Math.max(1, series.length);
+  const len = (v: number) => ((vertical ? plotH : plotW) * v) / top;
+  const bars: ReactNode[] = [];
+  cats.forEach((cat, ci) => {
+    const start = ci * band + (band - (stacked ? thick : thick * series.length)) / 2;
+    let acc = 0;
+    series.forEach((s, si) => {
+      const it = s.items[ci];
+      if (!it) return; // a missing value is an empty slot, never a zero bar
+      const off = stacked ? 0 : si * thick;
+      const l = len(it.value);
+      const base = stacked ? len(acc) : 0;
+      acc += it.value;
+      const c = series.length === 1 && !s.color ? colorOf(tokens, BAR_ROLE[it.role] || "bar_other") : fill(s);
+      const rect = vertical
+        ? { x: start + off, y: legendH + plotH - base - l, width: thick, height: Math.max(1, l) }
+        : { x: labelW + base, y: legendH + start + off, width: Math.max(1, l), height: thick };
+      const showLabel = !stacked || it.value / top >= STACK_LABEL_MIN;
+      const tx = vertical ? rect.x + thick / 2 : stacked ? rect.x + rect.width / 2 : rect.x + rect.width + 5;
+      const ty = vertical ? (stacked ? rect.y + rect.height / 2 : rect.y - 5) : rect.y + thick / 2;
+      bars.push(
+        <g key={`${ci}-${si}`}>
+          <rect {...rect} fill={c} />
+          {showLabel && (
+            <text x={tx} y={ty} textAnchor={vertical || stacked ? "middle" : "start"} dominantBaseline={vertical && !stacked ? "auto" : "middle"} fontWeight={700} fontSize={fs} fill={stacked && isDark(c) ? "#fff" : colorOf(tokens, "text")}>
+              {it.display}
+            </text>
+          )}
+        </g>,
+      );
+    });
+    const mid = ci * band + band / 2;
+    bars.push(
+      vertical ? (
+        <text key={`c${ci}`} x={mid} y={r.h - 6} textAnchor="middle" fontSize={fs} fill={colorOf(tokens, "text")}>
+          {cat}
+        </text>
+      ) : (
+        <text key={`c${ci}`} x={labelW - 6} y={legendH + mid} textAnchor="end" dominantBaseline="middle" fontSize={fs} fill={colorOf(tokens, "text")}>
+          {cat}
+        </text>
+      ),
+    );
+  });
+  return (
+    <svg className="ed-abs" style={{ left: r.x, top: r.y }} width={r.w} height={r.h} viewBox={`0 0 ${r.w} ${r.h}`}>
+      {legendH > 0 &&
+        series.map((s, si) => (
+          <text key={`l${si}`} x={r.w / 2 + (si - (series.length - 1) / 2) * 90} y={12} textAnchor="middle" fontSize={fs} fill={colorOf(tokens, "subtle")}>
+            <tspan fill={fill(s)}>■</tspan> {s.name}
+          </text>
+        ))}
+      {vertical && <line x1={0} x2={r.w} y1={legendH + plotH} y2={legendH + plotH} stroke={colorOf(tokens, "table_border")} />}
+      {bars}
+    </svg>
+  );
+}
+
 function BarChartView({ b, tokens }: { b: Extract<Block, { kind: "bar_chart" }>; tokens: Tokens }) {
+  if (b.series && b.series.length) return <MultiBarChartView b={b} tokens={tokens} />;
+  if (b.orientation === "v") {
+    // A single vertical series: one column per item, each keeping its own role color.
+    return <MultiBarChartView b={{ ...b, categories: b.items.map((i) => i.label), series: [{ name: "", role: "other", items: b.items }], stacked: false }} tokens={tokens} />;
+  }
   const r = b.region;
   const top = Math.max(1e-9, ...b.items.map((i) => i.value)) * 1.12;
   const labelW = Math.min(150, r.w * 0.32);
