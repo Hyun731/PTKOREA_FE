@@ -6,6 +6,7 @@ import { Suspense, useMemo, useState } from "react";
 import { CroppedImage } from "@/components/crop";
 import { ImpactPanel, ImpactZone } from "@/components/impact";
 import { MaterialStudio } from "@/components/material-studio";
+import { OwnedSummaryTab } from "@/components/owned-summary";
 import { useProject } from "@/components/project-context";
 import { Dialog, ErrorBox, Field, FileButton, PageIntro, Status, fmtDate } from "@/components/ui";
 import { api, fileUrl, type Batch, type Material, type ProjectConfig, type ResearchPlan, type ReviewSnapshot } from "@/lib/api";
@@ -376,12 +377,21 @@ function scopeOf(m: Material, cfg: ProjectConfig): string {
   return "2-8";
 }
 
+type TabId = "cards" | "self" | "compare";
+const TABS: { id: TabId; label: string }[] = [
+  { id: "cards", label: "모인 자료" },
+  { id: "self", label: "자사 분석" },
+  { id: "compare", label: "경쟁사 비교" },
+];
+
 function MaterialsInner() {
   const { project, meta, brandName, reload: reloadProject } = useProject();
   const params = useSearchParams();
   const router = useRouter();
   const pid = project?.id ?? null;
   const itemId = params.get("item");
+  // P3-2: 모인 자료 / 자사 분석 / 경쟁사 비교 탭 — 주소(?tab=)에 남겨 새로 고쳐도 같은 탭이 열린다.
+  const tab = (TABS.find((t) => t.id === params.get("tab")) ?? TABS[0]).id;
   const { data: materials, reload } = useApi<Material[]>(pid ? `/projects/${pid}/materials` : null);
   const [open, setOpen] = useState<string | null>(null);
   const [adding, setAdding] = useState(Boolean(itemId));
@@ -430,6 +440,7 @@ function MaterialsInner() {
     setAdding(false);
     if (itemId) router.replace(`/projects/${pid}/materials`);
   };
+  const pickTab = (id: TabId) => router.replace(`/projects/${pid}/materials${id === "cards" ? "" : `?tab=${id}`}`, { scroll: false });
   const specOf = Object.fromEntries(meta.scope.items.map((sp) => [sp.id, sp]));
   const byScope: Record<string, Material[]> = {};
   for (const m of live) (byScope[scopeOf(m, project.config)] ??= []).push(m);
@@ -450,6 +461,19 @@ function MaterialsInner() {
         모인 자료를 자사 → 경쟁사 → 소비자 순서로 묶었습니다. 카드를 열어 요약을 읽고 채택하거나 빼세요. 다 봤다면 남은 자료를 한 번에 채택할 수 있습니다.
       </PageIntro>
 
+      <div className="tabs" role="tablist" aria-label="자료 확인 보기">
+        {TABS.map((t) => (
+          <button key={t.id} role="tab" id={`tab-${t.id}`} aria-selected={tab === t.id} aria-controls="materials-panel" onClick={() => pickTab(t.id)}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      <div id="materials-panel" role="tabpanel" aria-labelledby={`tab-${tab}`} className="stack-lg">
+      {tab !== "cards" ? (
+        <OwnedSummaryTab pid={pid} mode={tab} tokens={meta.tokens} brands={project.config.brands.map((b) => ({ id: b.id, name: b.name }))} />
+      ) : (
+      <>
       <section className="card" aria-labelledby="box-title">
         <div className="card-head">
           <div className="grow">
@@ -534,6 +558,9 @@ function MaterialsInner() {
       <CommerceReviewSection pid={pid} brandName={brandName} onChanged={changed} />
 
       <CsvSection pid={pid} onChanged={changed} />
+      </>
+      )}
+      </div>
 
       <div className="sticky-foot">
         <div className="row wrap">
