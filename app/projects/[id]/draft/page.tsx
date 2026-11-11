@@ -52,7 +52,7 @@ function SynthesisPanel({ pid, brand, showBrandName, runs, onChanged }: { pid: s
         <div className="small muted mt8">
           {active
             ? `v${active.version} · ${active.types.map((t) => SYNTHESIS_TYPE_LABEL[t]).join(" · ")}`
-            : "본문 장표의 헤드라인으로 Executive Summary 등 종합 장표를 씁니다. 새 숫자는 넣지 않습니다."}
+            : "덱을 만들면 기본 Executive Summary와 인사이트가 자동 생성됩니다. 여기서는 유형과 문구를 바꿔 다시 쓸 수 있습니다."}
         </div>
         {active?.stale && <span className="badge b-warn mt8">본문이 바뀌었습니다, 다시 쓰기를 권합니다</span>}
       </div>
@@ -74,7 +74,7 @@ function SynthesisPanel({ pid, brand, showBrandName, runs, onChanged }: { pid: s
 
       <div className="actions">
         <button className="btn sm primary" disabled={act.busy || selected.length === 0} onClick={write}>
-          {act.busy ? "쓰는 중…" : active ? "다시 쓰기" : "종합 장표 만들기"}
+          {act.busy ? "쓰는 중…" : "다시 쓰기"}
         </button>
         {active && (
           <button className="btn sm ghost" disabled={act.busy} onClick={clear}>
