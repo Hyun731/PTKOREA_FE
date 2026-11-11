@@ -217,7 +217,8 @@ export type OutlineSection = { kind: "section"; title: string; subtitle: string;
 // Why a planned slide has no page: cards waiting to be adopted, nothing collected, an input the collector needs, a CSV.
 export type MissingCause = "adopt" | "collect" | "setup" | "upload" | "access";
 export type MissingSlot = { slot_id: string; label: string; reason: string | null; cause: MissingCause | null; action: string | null; item_ids: string[] };
-export type Outline = { flow: (OutlineSlide | OutlineSection)[]; pages: number; missing: MissingSlot[]; omitted: { slot_id: string; label: string; reason: string | null }[]; fingerprint: string };
+export type ThinSlot = { slot_id: string; label: string; reason: string | null };
+export type Outline = { flow: (OutlineSlide | OutlineSection)[]; pages: number; missing: MissingSlot[]; thin: ThinSlot[]; omitted: { slot_id: string; label: string; reason: string | null }[]; fingerprint: string };
 
 // 종합 장표(Phase 3-1): 자사 브랜드마다, 고른 유형마다, 버전마다 따로 남는다.
 export type SynthesisType = "insight" | "swot" | "problem";
