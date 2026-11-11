@@ -293,7 +293,7 @@ export type Material = {
   updated_at: string;
 };
 
-export type Batch = { id: string; kind: "facts" | "posts"; filename: string; status: string; total_rows: number; valid_rows: number; errors: { row_no: number; column: string | null; code: string; message: string }[]; duplicates: unknown[]; synthetic: boolean; reviewed_by: string | null; created_at: string };
+export type Batch = { id: string; kind: "facts" | "posts" | "client"; filename: string; status: string; total_rows: number; valid_rows: number; errors: { row_no: number; column: string | null; code: string; message: string }[]; duplicates: unknown[]; synthetic: boolean; reviewed_by: string | null; created_at: string; has_source_file?: boolean };
 
 // Phase 2 커머스 리뷰 — 판매 플랫폼 공개 페이지에서 모은 대표 상품 평점·리뷰 스냅샷(CM1/CM2).
 export type ReviewKeyword = {

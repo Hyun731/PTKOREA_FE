@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
+import { ClientDataSection } from "@/components/client-data";
 import { CroppedImage } from "@/components/crop";
 import { ImpactPanel, ImpactZone } from "@/components/impact";
 import { MaterialStudio } from "@/components/material-studio";
@@ -33,7 +34,8 @@ function CsvSection({ pid, onChanged }: { pid: string; onChanged: () => void }) 
       await api.post(`/projects/${pid}/imports/sample?posts=${posts}`);
       await after();
     }, "합성 샘플 CSV를 불러왔습니다");
-  const visible = (batches ?? []).filter((b) => b.status !== "replaced");
+  // 보유 자료(client)는 아래 따로 둔 섹션에서 올리고 채택한다.
+  const visible = (batches ?? []).filter((b) => b.status !== "replaced" && b.kind !== "client");
   const review = (b: Batch, act: "accept" | "reject") =>
     action.run(async () => {
       await api.post(`/imports/${b.id}/review`, act === "accept" ? { action: "accept" } : { action: "reject", reason: "자료 확인에서 뺌" });
@@ -556,6 +558,8 @@ function MaterialsInner() {
       </section>
 
       <CommerceReviewSection pid={pid} brandName={brandName} onChanged={changed} />
+
+      <ClientDataSection pid={pid} tokens={meta.tokens} onChanged={changed} />
 
       <CsvSection pid={pid} onChanged={changed} />
       </>
