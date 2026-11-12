@@ -494,3 +494,43 @@ table.table input, table.table select { min-height: 38px; }
 .synth-types { display: flex; gap: 8px; flex-wrap: wrap; }
 .synth-types .chip.on { background: var(--brand-soft); color: var(--brand-text); }
 .synth-types .chip .num { background: var(--brand); color: #fff; border-radius: 999px; min-width: 16px; height: 16px; font-size: 11px; display: inline-flex; align-items: center; justify-content: center; padding: 0 4px; }
+.diagnosis-list { display: flex; flex-direction: column; gap: 22px; }
+.diagnosis-brand { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px; display: flex; flex-direction: column; gap: 18px; box-shadow: var(--shadow-sm); }
+.diagnosis-head h2 { margin: 0; font-size: 22px; }
+.diagnosis-profile { margin: 10px 0 0; font-size: 19px; line-height: 1.5; font-weight: 800; color: var(--brand-text); max-width: 880px; }
+.diagnosis-funnel { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.diagnosis-stage { min-height: 116px; padding: 14px; border-radius: var(--radius-sm); background: var(--surface-2); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; }
+.diagnosis-stage::after { content: ""; width: 26px; height: 4px; border-radius: 999px; background: var(--line-2); order: -1; }
+.diagnosis-stage.good { background: var(--ok-soft); border-color: color-mix(in srgb, var(--ok) 25%, transparent); }
+.diagnosis-stage.good::after { background: var(--ok); }
+.diagnosis-stage.drop { background: var(--warn-soft); border-color: color-mix(in srgb, var(--warn) 25%, transparent); }
+.diagnosis-stage.drop::after { background: var(--warn); }
+.diagnosis-stage strong { font-size: 18px; }
+.diagnosis-stage > span:last-child { font-size: 13.5px; color: var(--text-2); line-height: 1.4; }
+.diagnosis-claims { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.diagnosis-claim { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.diagnosis-claim.excluded { opacity: 0.62; background: var(--surface-2); }
+.diagnosis-claim-title { font-size: 17px; font-weight: 800; line-height: 1.55; }
+.diagnosis-line { margin: 0; }
+.diagnosis-accent { color: var(--brand-text); font-weight: 800; background: var(--highlight); border-radius: 3px; padding: 0 2px; }
+.diagnosis-evidence { background: var(--surface-2); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 3px; color: var(--text-2); font-size: 14px; }
+.diagnosis-lower { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.diagnosis-block { border-top: 1px solid var(--line); padding-top: 16px; min-width: 0; }
+.diagnosis-block h3 { margin: 0 0 10px; font-size: 16px; }
+.diagnosis-cdj { display: flex; flex-direction: column; gap: 6px; }
+.diagnosis-cdj > div { display: grid; grid-template-columns: 70px repeat(3, minmax(0, 1fr)); gap: 8px; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); font-size: 13px; }
+.diagnosis-proposals { display: grid; gap: 8px; }
+.diagnosis-proposals article { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 10px 12px; border-radius: 8px; background: var(--surface-2); }
+.diagnosis-rewrite { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; padding-top: 16px; border-top: 1px solid var(--line); }
+.empty-state { padding: 24px; border: 1px dashed var(--line-2); border-radius: var(--radius-sm); background: var(--surface-2); text-align: center; }
+.empty-state p { margin-bottom: 0; }
+@media (max-width: 900px) {
+  .diagnosis-funnel { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .diagnosis-claims, .diagnosis-lower { grid-template-columns: minmax(0, 1fr); }
+  .diagnosis-cdj > div { grid-template-columns: 64px minmax(0, 1fr); }
+}
+@media (max-width: 760px) {
+  .diagnosis-brand { padding: 18px; }
+  .diagnosis-funnel { grid-template-columns: minmax(0, 1fr); }
+  .diagnosis-rewrite { grid-template-columns: minmax(0, 1fr); }
+}

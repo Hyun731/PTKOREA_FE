@@ -244,14 +244,45 @@ export type CollectionMixChannel = { count: number; label: string; enough?: bool
 export type CollectionMixBrand = {
   brand_id: string;
   brand_name: string;
-  channels: Record<"press" | "owned" | "influencer" | "cafe_blog" | "community" | "review", CollectionMixChannel>;
+  channels: Record<"press" | "owned" | "influencer" | "cafe_blog" | "community" | "kin" | "sns_search" | "review", CollectionMixChannel>;
   access_unavailable: number;
   press_ratio: number;
   press_over_warning: boolean;
 };
 export type CollectionMix = { brands: CollectionMixBrand[] };
 
-export type Part = { type: "text" | "fact" | "meta" | "date" | "name" | "link"; text?: string | null; display?: string | null; fact_id?: string | null; formatter?: string | null; href?: string | null; bold?: boolean };
+export type Part = { type: "text" | "fact" | "meta" | "date" | "name" | "link"; text?: string | null; display?: string | null; fact_id?: string | null; formatter?: string | null; href?: string | null; bold?: boolean; color?: string | null };
+export type Paragraph = { parts: Part[]; bullet?: string | null };
+
+export type DiagnosisStage = { stage: string; fact_id?: string | null; label: string; status: "강점" | "이탈" | "보통" };
+export type DiagnosisClaim = {
+  id: string;
+  kind: "strength" | "weakness";
+  claim: Paragraph[];
+  evidence: Paragraph[];
+  chart?: { type: "bar" | "column" | "stacked" | "line"; fact_ids: string[] } | null;
+  quote_material_ids: string[];
+  excluded: boolean;
+  edited: boolean;
+};
+export type DiagnosisData = {
+  profile: string;
+  funnel: DiagnosisStage[];
+  claims: DiagnosisClaim[];
+  cdj: { stage: string; touchpoint: string; state: string; activity: string }[];
+  proposals: { pillar: string; title: string; cdj_stage?: string | null; basis_fact_ids: string[]; basis: Paragraph[] }[];
+};
+export type DiagnosisVersion = { version: number; origin: "auto" | "rewrite" | "edit" | "restore"; by: string; instruction: string; created_at: string | null; dropped: number };
+export type BrandDiagnosis = {
+  brand_id: string;
+  brand_name: string;
+  active: number | null;
+  stale: boolean;
+  data: DiagnosisData | null;
+  dropped: string[];
+  claim_labels: Record<string, string>;
+  versions: DiagnosisVersion[];
+};
 
 export type Claim = { id: string; kind: "fact" | "interpretation" | "recommendation"; parts: Part[]; text: string; fact_ids: string[]; author: string; quote?: string | null; review_status: "pending" | "accepted" | "excluded" | "stale"; stale_reason: string | null; version: number; issues: string[] };
 

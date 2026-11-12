@@ -6,7 +6,7 @@ import { ChatThread, type ChatMessage } from "@/components/chat";
 import { CauseAction, CauseBadge, RecollectButton } from "@/components/missing-cause";
 import { useProject } from "@/components/project-context";
 import { ErrorBox, PageIntro } from "@/components/ui";
-import { api, type Brand, type Outline, type OutlineSlide, type SynthesisRun, type SynthesisType } from "@/lib/api";
+import { api, type Brand, type BrandDiagnosis, type Outline, type OutlineSlide, type Paragraph, type SynthesisRun, type SynthesisType } from "@/lib/api";
 import { useAction, useApi } from "@/lib/hooks";
 
 const SYNTHESIS_TYPES: SynthesisType[] = ["swot", "insight", "problem"];
@@ -113,6 +113,176 @@ function SynthesisPanel({ pid, brand, showBrandName, runs, onChanged }: { pid: s
   );
 }
 
+const DIAGNOSIS_ORIGIN = { auto: "자동 생성", rewrite: "다시 쓰기", edit: "직접 편집", restore: "버전 복원" } as const;
+
+function Paragraphs({ paragraphs }: { paragraphs: Paragraph[] }) {
+  return (
+    <>
+      {paragraphs.map((paragraph, index) => (
+        <p key={index} className="diagnosis-line">
+          {paragraph.parts.map((part, partIndex) => (
+            <span key={partIndex} className={part.type === "fact" || part.color === "accent" ? "diagnosis-accent" : undefined}>
+              {part.display ?? part.text ?? ""}
+            </span>
+          ))}
+        </p>
+      ))}
+    </>
+  );
+}
+
+function DiagnosisPanel({ pid, diagnosis, onChanged }: { pid: string; diagnosis: BrandDiagnosis; onChanged: () => Promise<void> }) {
+  const [instruction, setInstruction] = useState("");
+  const action = useAction();
+  const data = diagnosis.data;
+
+  const rewrite = () =>
+    action.run(async () => {
+      await api.post(`/projects/${pid}/diagnosis`, { brand_id: diagnosis.brand_id, instruction });
+      setInstruction("");
+      await onChanged();
+    }, `${diagnosis.brand_name} 진단을 다시 썼습니다`);
+  const toggleClaim = (claimId: string, excluded: boolean) =>
+    action.run(async () => {
+      await api.patch(`/projects/${pid}/diagnosis/${encodeURIComponent(diagnosis.brand_id)}/claims/${encodeURIComponent(claimId)}`, { excluded });
+      await onChanged();
+    }, excluded ? "주장을 진단 장표에서 뺐습니다" : "주장을 진단 장표에 다시 넣었습니다");
+  const restoreVersion = (version: number) =>
+    action.run(async () => {
+      await api.post(`/projects/${pid}/diagnosis/${encodeURIComponent(diagnosis.brand_id)}/versions/${version}/activate`, {});
+      await onChanged();
+    }, `v${version} 진단을 복원했습니다`);
+
+  return (
+    <section className="diagnosis-brand" aria-labelledby={`diagnosis-${diagnosis.brand_id}`}>
+      <div className="diagnosis-head">
+        <div className="grow">
+          <div className="row wrap" style={{ gap: 8 }}>
+            <h2 id={`diagnosis-${diagnosis.brand_id}`}>{diagnosis.brand_name}</h2>
+            {diagnosis.active && <span className="badge b-brand">v{diagnosis.active}</span>}
+            {diagnosis.stale && <span className="badge b-warn">자료 변경됨 · 다시 쓰기 권장</span>}
+          </div>
+          {data?.profile && <p className="diagnosis-profile">{data.profile}</p>}
+        </div>
+      </div>
+
+      {!data ? (
+        <div className="empty-state">
+          <strong>아직 생성된 브랜드 진단이 없습니다.</strong>
+          <p className="small muted">수치 자료를 채택한 뒤 다시 쓰거나 PPT를 만들면 진단이 생성됩니다.</p>
+        </div>
+      ) : (
+        <>
+          <div className="diagnosis-funnel" aria-label={`${diagnosis.brand_name} 구매 퍼널`}>
+            {data.funnel.map((stage) => (
+              <div key={stage.stage} className={`diagnosis-stage ${stage.status === "강점" ? "good" : stage.status === "이탈" ? "drop" : ""}`}>
+                <span className="small muted">{stage.stage}</span>
+                <strong>{stage.status}</strong>
+                <span>{stage.label || "대표 지표 없음"}</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="diagnosis-claims">
+            {data.claims.map((claim) => (
+              <article key={claim.id} className={`diagnosis-claim ${claim.excluded ? "excluded" : ""}`}>
+                <div className="row wrap" style={{ gap: 8 }}>
+                  <span className={`badge ${claim.kind === "strength" ? "b-ok" : "b-warn"}`}>{diagnosis.claim_labels[claim.id] ?? (claim.kind === "strength" ? "강점" : "약점")}</span>
+                  {claim.edited && <span className="badge b-brand">직접 고침</span>}
+                  {claim.excluded && <span className="badge">장표에서 제외</span>}
+                  <span className="grow" />
+                  <button className="btn sm ghost" disabled={action.busy} onClick={() => toggleClaim(claim.id, !claim.excluded)}>
+                    {claim.excluded ? "다시 넣기" : "장표에서 빼기"}
+                  </button>
+                </div>
+                <div className="diagnosis-claim-title"><Paragraphs paragraphs={claim.claim} /></div>
+                {claim.evidence.length > 0 && (
+                  <div className="diagnosis-evidence">
+                    <span className="small muted">근거</span>
+                    <Paragraphs paragraphs={claim.evidence} />
+                  </div>
+                )}
+                <div className="small faint">
+                  {claim.chart && `차트 ${claim.chart.type} · 근거 수치 ${claim.chart.fact_ids.length}개`}
+                  {claim.chart && claim.quote_material_ids.length > 0 && " · "}
+                  {claim.quote_material_ids.length > 0 && `원문 ${claim.quote_material_ids.length}건`}
+                </div>
+              </article>
+            ))}
+          </div>
+
+          {(data.cdj.length > 0 || data.proposals.length > 0) && (
+            <div className="diagnosis-lower">
+              {data.cdj.length > 0 && (
+                <div className="diagnosis-block">
+                  <h3>고객 여정 진단</h3>
+                  <div className="diagnosis-cdj">
+                    {data.cdj.map((row, index) => (
+                      <div key={`${row.stage}-${index}`}>
+                        <strong>{row.stage}</strong>
+                        <span>{row.touchpoint}</span>
+                        <span>{row.state}</span>
+                        <span>{row.activity}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {data.proposals.length > 0 && (
+                <div className="diagnosis-block">
+                  <h3>근거 기반 실행 제안</h3>
+                  <div className="diagnosis-proposals">
+                    {data.proposals.map((proposal, index) => (
+                      <article key={`${proposal.pillar}-${index}`}>
+                        <span className="badge b-brand">{proposal.pillar}</span>
+                        <strong>{proposal.title}</strong>
+                        {proposal.cdj_stage && <span className="small muted">고객 여정 · {proposal.cdj_stage}</span>}
+                        <Paragraphs paragraphs={proposal.basis} />
+                      </article>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      <div className="diagnosis-rewrite">
+        <input aria-label={`${diagnosis.brand_name} 진단 다시 쓰기 요청`} placeholder="다시 쓸 때 강조할 점 (선택)" value={instruction} onChange={(event) => setInstruction(event.target.value)} />
+        <button className="btn primary" disabled={action.busy} onClick={rewrite}>{action.busy ? "처리 중…" : data ? "진단 다시 쓰기" : "진단 만들기"}</button>
+      </div>
+      <ErrorBox error={action.error} />
+
+      {diagnosis.dropped.length > 0 && (
+        <details className="more">
+          <summary>검증에서 제외된 문장 ({diagnosis.dropped.length})</summary>
+          <ul className="draft-points mt8">{diagnosis.dropped.map((item, index) => <li key={index}>{item}</li>)}</ul>
+        </details>
+      )}
+      {diagnosis.versions.length > 0 && (
+        <details className="more">
+          <summary>버전 기록 ({diagnosis.versions.length})</summary>
+          <ul className="list mt8">
+            {diagnosis.versions.map((version) => (
+              <li key={version.version}>
+                <div className="grow">
+                  <div className="title">v{version.version} · {DIAGNOSIS_ORIGIN[version.origin]} {version.version === diagnosis.active && <span className="badge b-brand">현재</span>}</div>
+                  <div className="meta">
+                    {version.instruction ? `“${version.instruction}” · ` : ""}{version.by}{version.created_at ? ` · ${new Date(version.created_at).toLocaleString("ko-KR")}` : ""}
+                    {version.dropped > 0 && ` · 검증 제외 ${version.dropped}건`}
+                  </div>
+                </div>
+                {version.version !== diagnosis.active && <button className="btn sm" disabled={action.busy} onClick={() => restoreVersion(version.version)}>복원</button>}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </section>
+  );
+}
+
 // What each calculation rule found, in words (shown under the draft: they feed headlines and Recap).
 const RULE_LABEL: Record<string, string> = {
   "RULE-R03": "월별 검색 지수",
@@ -130,6 +300,8 @@ export default function DraftPage() {
   const pid = project?.id;
   const { data: outline, reload, error } = useApi<Outline>(pid ? `/projects/${pid}/outline` : null);
   const { data: synthesisRuns, reload: reloadSynthesis } = useApi<SynthesisRun[]>(pid ? `/projects/${pid}/synthesis` : null);
+  const { data: diagnoses, reload: reloadDiagnoses, error: diagnosisError } = useApi<BrandDiagnosis[]>(pid ? `/projects/${pid}/diagnosis` : null);
+  const [view, setView] = useState<"draft" | "diagnosis">("draft");
   // Kept as picked, so the conversation stays visible after its slide is taken out.
   const [picked, setPicked] = useState<{ slide_id: string; title: string; page_no: number | null } | null>(null);
   const selected = picked?.slide_id ?? null;
@@ -143,7 +315,7 @@ export default function DraftPage() {
   const current = live ?? picked;
   const messages = (selected && threads[selected]) || [];
   const refresh = async () => {
-    await Promise.all([reload(), reloadProject(), reloadSynthesis()]);
+    await Promise.all([reload(), reloadProject(), reloadSynthesis(), reloadDiagnoses()]);
   };
   const send = (message: string) => {
     if (!live) return;
@@ -170,11 +342,25 @@ export default function DraftPage() {
 
   return (
     <div className="stack-lg">
-      <PageIntro step="4단계" title="초안 흐름">
-        PPT를 만들기 전에 장표 순서와 장마다 핵심 문장을 글로 봅니다. 장을 누르고 왼쪽에서 말로 고쳐 달라고 하세요.
+      <PageIntro step="4단계" title="초안과 브랜드 진단">
+        장표 흐름을 고치고, 수집한 근거로 만든 브랜드별 진단과 실행 제안을 확인합니다.
       </PageIntro>
-      <ErrorBox error={error ?? action.error} />
-      {!outline ? (
+      <div className="tabs" role="tablist" aria-label="초안과 진단 보기">
+        <button type="button" role="tab" aria-selected={view === "draft"} onClick={() => setView("draft")}>초안</button>
+        <button type="button" role="tab" aria-selected={view === "diagnosis"} onClick={() => setView("diagnosis")}>
+          진단 {diagnoses && <span className="badge b-brand">{diagnoses.filter((item) => item.data).length}/{diagnoses.length}</span>}
+        </button>
+      </div>
+      <ErrorBox error={view === "draft" ? error ?? action.error : diagnosisError} />
+      {view === "diagnosis" ? (
+        !diagnoses ? (
+          <p className="muted">브랜드 진단을 불러오는 중…</p>
+        ) : (
+          <div className="diagnosis-list">
+            {diagnoses.map((diagnosis) => <DiagnosisPanel key={`${diagnosis.brand_id}:${diagnosis.active ?? 0}`} pid={pid} diagnosis={diagnosis} onChanged={refresh} />)}
+          </div>
+        )
+      ) : !outline ? (
         <p className="muted">초안을 만드는 중…</p>
       ) : (
         <div className="draft">
@@ -331,7 +517,7 @@ export default function DraftPage() {
       )}
       <div className="sticky-foot">
         <div className="row wrap">
-          <span className="grow small muted">흐름이 괜찮으면 PPT를 만드세요. 여기서 고친 헤드라인은 PPT에 그대로 들어갑니다.</span>
+          <span className="grow small muted">초안과 진단이 괜찮으면 PPT를 만드세요. 여기서 제외한 주장과 고친 헤드라인이 그대로 반영됩니다.</span>
           <Link href={`/projects/${pid}/output`} className="btn primary">
             다음 단계: PPT 만들기 →
           </Link>
