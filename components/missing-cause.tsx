@@ -22,8 +22,10 @@ export function CauseBadge({ cause }: { cause: MissingCause | null }) {
 export function CauseAction({ pid, cause, action }: { pid: string; cause: MissingCause | null; action: string | null }) {
   if (!cause) return null;
   const to =
-    cause === "adopt" || cause === "upload"
-      ? { href: `/projects/${pid}/materials`, label: cause === "adopt" ? "채택하러 가기" : "CSV 올리기" }
+    cause === "adopt"
+      ? { href: `/projects/${pid}/materials`, label: "채택하러 가기" }
+      : cause === "upload" // P4-5: 자동 수집이 없는 자료는 자료 확인의 '보유 자료'에서 올린다
+        ? { href: `/projects/${pid}/materials#client-data`, label: "보유 자료 올리기" }
       : cause === "setup"
         ? { href: action?.startsWith("설정") ? `/projects/${pid}/setup` : `/projects/${pid}/research`, label: "입력하러 가기" }
         : { href: `/projects/${pid}/research`, label: "조사 계획 보기" };
