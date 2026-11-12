@@ -223,7 +223,7 @@ function NewMaterialDialog({ pid, itemId, onClose, onCreated }: { pid: string; i
   const [seeded, setSeeded] = useState(false);
   if (item && !seeded) {
     setSeeded(true);
-    setF((x) => ({ ...x, brand_id: item.brand_id, entity: item.entity, section_id: ["campaign", "market", "influencer"].includes(item.section_id) ? item.section_id : "campaign" }));
+    setF((x) => ({ ...x, brand_id: item.brand_id, entity: item.entity, section_id: ["campaign", "market", "influencer", "issue"].includes(item.section_id) ? item.section_id : "campaign" }));
   }
   const action = useAction();
   const brand = brands.find((b) => b.id === f.brand_id);
@@ -308,6 +308,7 @@ function NewMaterialDialog({ pid, itemId, onClose, onCreated }: { pid: string; i
                   <option value="campaign">캠페인 사례 카드 (C1)</option>
                   <option value="market">시장·타겟 근거 (M1)</option>
                   <option value="influencer">인플루언서 장표의 레퍼런스 이미지 (3-1)</option>
+                  <option value="issue">이슈·포지셔닝·트렌드 (자료 확인용)</option>
                 </select>
               )}
             </Field>
