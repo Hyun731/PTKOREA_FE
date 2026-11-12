@@ -220,7 +220,8 @@ export default function ResearchPage() {
   const has = (i: ResearchItem, ...ids: string[]) => i.channels.some((c) => ids.includes(c.id));
   const canAuto = (i: ResearchItem) =>
     Boolean(
-      i.section_id === "campaign" || i.section_id === "market" ? providers.perplexity && has(i, "web") :
+      // P4-3: 이슈·포지셔닝·트렌드(issue) 항목도 웹 기사(Perplexity)로 자동 수집 — 네이버 뉴스는 키가 있으면 함께
+      i.section_id === "campaign" || i.section_id === "market" || i.section_id === "issue" ? providers.perplexity && has(i, "web") :
       i.section_id === "influencer" ? providers.scrapecreators && has(i, "instagram", "youtube") :
       i.section_id === "voc" ? providers.perplexity && has(i, "community", "naver_blog") : false,
     );
