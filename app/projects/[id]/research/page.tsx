@@ -46,7 +46,7 @@ function DirectionChat({ pid, entry, version, onChanged }: { pid: string; entry:
   );
 }
 
-const MIX_CHANNELS: (keyof CollectionMix["brands"][number]["channels"])[] = ["press", "owned", "influencer", "cafe_blog", "community", "review"];
+const MIX_CHANNELS: (keyof CollectionMix["brands"][number]["channels"])[] = ["press", "owned", "influencer", "cafe_blog", "community", "kin", "sns_search", "review"];
 
 /** Phase 1-4: 조사가 기사에만 치우쳤는지 바로 보이게 — 브랜드 × 채널 건수 표 하나와 경고 배지. */
 function CollectionMixCard({ mix }: { mix: CollectionMix | null }) {
