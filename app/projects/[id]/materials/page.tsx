@@ -353,7 +353,11 @@ function MaterialGrid({ cards, brandName, onOpen }: { cards: Material[]; brandNa
                 <div className="meta">
                   {m.source.publisher ?? brandName(m.brand_id)} · {fmtDate(m.activity_date ?? m.source.published_at)}
                 </div>
-                {m.summary && <div className="summary">{m.summary}</div>}
+                {m.summary ? (
+                  <div className="summary">{m.summary}</div>
+                ) : m.extraction_status === "pending" ? (
+                  <div className="summary muted">{m.excerpt ? `${m.excerpt.slice(0, 120)}… · ` : ""}열면 AI가 원문을 읽고 요약합니다</div>
+                ) : null}
                 <div className="meta num">
                   이미지 {m.assets.length} · 수치 {m.facts.length} · 채택 문장 {acceptedClaims}/{m.claims.length}
                 </div>
@@ -433,11 +437,13 @@ function MaterialsInner() {
   const acceptAll = () =>
     dedupe.run(
       async () => {
-        const r = await api.post<{ accepted: number; left: number }>(`/projects/${pid}/materials/accept-all`);
+        const r = await api.post<{ accepted: number; left: number; extract_job_id: string | null }>(`/projects/${pid}/materials/accept-all`);
         changed();
         return r;
       },
-      (r) => (r.left ? `${r.accepted}개를 채택했습니다 · 관련성·기간·원문 확인이 필요한 ${r.left}개는 남겨 두었습니다` : `${r.accepted}개를 모두 채택했습니다`),
+      (r) =>
+        (r.left ? `${r.accepted}개를 채택했습니다 · 관련성·기간·원문 확인이 필요한 ${r.left}개는 남겨 두었습니다` : `${r.accepted}개를 모두 채택했습니다`) +
+        (r.extract_job_id ? " · 아직 요약 전인 자료는 서버에서 요약·수치를 만드는 중입니다" : ""),
     );
   const closeAdd = () => {
     setAdding(false);

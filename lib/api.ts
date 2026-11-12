@@ -318,6 +318,7 @@ export type Material = {
   duplicate_reason: string | null;
   event_name: string | null;
   summary: string | null; // 해석 요약: what was done, why, how it landed
+  extraction_status?: "pending" | "done" | "failed" | null; // pending: 요약·수치는 자료를 처음 열 때 만든다
   scope_id: string | null; // its item in the 3C plan
   role: "self" | "competitor" | "benchmark" | "market" | null;
   featured: boolean;

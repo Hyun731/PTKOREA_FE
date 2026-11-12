@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChatThread, type ChatMessage } from "@/components/chat";
 import { CroppedImage } from "@/components/crop";
 import { Dialog, ErrorBox, FileButton, Status, fmtDate } from "@/components/ui";
@@ -305,6 +305,18 @@ export function MaterialStudio({ id, projectId, onClose, onChanged }: { id: stri
     await reload();
     onChanged();
   };
+  // 수집 때는 원문만 저장한다 — 처음 열 때 한 번 AI가 요약·수치·문장을 만들고, 다시 열면 저장된 결과를 쓴다.
+  const extract = useAction();
+  const asked = useRef(false);
+  useEffect(() => {
+    if (!m || m.extraction_status !== "pending" || asked.current) return;
+    asked.current = true;
+    extract.run(async () => {
+      await api.post(`/materials/${id}/extract`);
+      await refresh();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [m?.extraction_status, id]);
   const review = (status: "accepted" | "excluded" | "candidate", msg: string) =>
     action.run(async () => {
       // Adopting the card adopts the image it shows, so the slide has what the person saw.
@@ -325,7 +337,7 @@ export function MaterialStudio({ id, projectId, onClose, onChanged }: { id: stri
         m && (
           <>
             <span className="grow" />
-            <ErrorBox error={action.error} />
+            <ErrorBox error={action.error ?? extract.error} />
             {m.review_status === "excluded" ? (
               <button className="btn" disabled={action.busy} onClick={() => review("candidate", "되돌렸습니다")}>
                 되돌리기
@@ -336,7 +348,7 @@ export function MaterialStudio({ id, projectId, onClose, onChanged }: { id: stri
               </button>
             )}
             {m.review_status !== "accepted" && (
-              <button className="btn primary" disabled={action.busy || Boolean(m.duplicate_of)} onClick={() => review("accepted", "자료를 채택했습니다")}>
+              <button className="btn primary" disabled={action.busy || extract.busy || Boolean(m.duplicate_of)} onClick={() => review("accepted", "자료를 채택했습니다")}>
                 이 자료 채택
               </button>
             )}
@@ -346,6 +358,8 @@ export function MaterialStudio({ id, projectId, onClose, onChanged }: { id: stri
     >
       {!m ? (
         <p className="muted">불러오는 중…</p>
+      ) : extract.busy ? (
+        <p className="muted" role="status">AI가 원문을 읽고 요약·수치·문장을 만드는 중입니다 · 처음 열 때 한 번만 합니다</p>
       ) : (
         <div className="studio with-chat">
           <ChatSide m={m} />
