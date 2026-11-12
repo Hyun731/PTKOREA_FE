@@ -1,5 +1,6 @@
 // Thin client for the /v1 API. The server is the source of truth: screens refetch after
 // every mutation instead of keeping their own copies (DEVELOPMENT_PLAN 4 화면과 조사 계획).
+import type { Tokens } from "@/components/editor/types";
 
 // Same-origin by default: next.config.mjs proxies /v1 to the API server (works through tunnels too).
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "/v1";
@@ -361,4 +362,35 @@ export type Meta = {
   render_backend: string;
   industries: { id: string; types: string[]; review_required: boolean; has_keyword_profile: boolean }[];
   official_channels: { id: string; label: string; auto_collect: boolean; tier: "primary" | "secondary" }[];
+  tokens: Tokens; // 장표 색·캔버스 — 화면 차트가 장표와 같은 색을 쓴다
+};
+
+// P3-2 자사 분석 / 경쟁사 비교 탭 (GET /projects/{id}/owned-summary). 값마다 확인 상태가 붙는다.
+export type SummaryValue = { fact_id: string; value: number; display: string; status: "candidate" | "eligible" | "derived"; measured_at: string };
+export type SummaryRole = "self" | "competitor";
+export type OwnedKpi = {
+  key: string;
+  label: string;
+  metric: string;
+  format: string | null;
+  values: ({ entity: string; role: SummaryRole } & SummaryValue)[];
+  vs_competitor: { competitor: string; diff: number; ratio_pct: number | null } | null;
+};
+export type OwnedChannel = {
+  channel: string;
+  label: string;
+  kpis: OwnedKpi[];
+  monthly_posts: { months: string[]; series: { entity: string; role: SummaryRole; points: ({ month: string; value: number | null } & Partial<SummaryValue>)[] }[] };
+  sentiment: { entity: string; role: SummaryRole; n: number; method: string; rates: ({ polarity: string; label: string } & SummaryValue)[] }[];
+};
+export type OwnedSummary = {
+  brand: { id: string; name: string };
+  entities: { name: string; role: SummaryRole }[];
+  channels: OwnedChannel[];
+  pain_points: ({ entity: string; pain_point: string | null; n: number | null; examples: string[] } & SummaryValue)[];
+  blog_types: { keyword: string; entity: string; n: number | null; shares: ({ type: string | null; label: string | null } & SummaryValue)[] }[];
+  mentions: ({ entity: string; keyword_group: string | null; keyword: string | null; channel: string | null; channel_label: string | null } & SummaryValue)[];
+  voc_negative: ({ entity: string; site: string | null; n: number } & SummaryValue)[];
+  has_data: boolean;
+  empty: { message: string; settings_path: string } | null;
 };
