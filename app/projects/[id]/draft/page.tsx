@@ -472,7 +472,6 @@ export default function DraftPage() {
             {(plan?.findings ?? []).length > 0 && (
               <details className="more">
                 <summary>숫자로 찾은 발견 ({plan!.findings.length}) — 헤드라인과 Recap의 근거</summary>
-                {plan!.synthetic_data && <p className="small mt8" style={{ color: "var(--warn)" }}>합성 테스트 자료로 계산한 결과입니다. 실제 시장 데이터가 아닙니다.</p>}
                 <ul className="list mt8">
                   {plan!.findings.map((f) => (
                     <li key={f.id}>

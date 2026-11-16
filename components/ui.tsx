@@ -73,6 +73,7 @@ const STATUS: Record<string, [string, string, string]> = {
   replaced: ["교체됨", "b-outline", "↺"],
   stale: ["재검토 필요", "b-warn", "!"],
   ready: ["생성 가능", "b-ok", "✓"],
+  ready_with_review: ["초안 완료 · 확인 권장", "b-warn", "!"],
   needs_input: ["자료 없어 빠짐", "b-outline", "–"],
   omitted: ["생략", "b-outline", "–"],
   not_started: ["미실행", "b-outline", "○"],

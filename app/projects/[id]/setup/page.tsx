@@ -46,7 +46,6 @@ export default function SetupPage() {
       <PageIntro step="1단계" title="프로젝트 설정">무엇을, 누구와 비교해, 어느 기간으로 볼지 정합니다.</PageIntro>
       <div className="with-impact">
         <div className="stack-lg">
-          {project.config.import_defaults_applied.length > 0 && <Notice>기존 정량 샘플에서 가져온 프로젝트라 보고서 유형과 섹션 기간을 가져오기 기본값으로 채웠습니다.</Notice>}
           <ProjectForm value={draft} onChange={setDraft} meta={meta} />
 
           <Notice>조사 기간과 채널은 2단계 조사 계획에서 항목마다 정합니다. 기본값은 위 조사 기간을 따릅니다.</Notice>

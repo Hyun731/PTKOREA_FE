@@ -14,7 +14,6 @@ function Shell({ children }: { children: ReactNode }) {
   const [nextOpen, setNextOpen] = useState(false);
   const pathname = usePathname() ?? "";
   const { id } = useParams<{ id: string }>();
-  const synthetic = project?.name.includes("합성");
   const onStudio = pathname.endsWith("/studio");
   // "팩트북 출력" opens the editor on the latest ready draft; without a draft it stays on the output step.
   const { data: decks, reload: reloadDecks } = useApi<DeckOut[]>(id ? `/projects/${id}/decks` : null);
@@ -106,7 +105,6 @@ function Shell({ children }: { children: ReactNode }) {
                 {fmtDate(project.config.period.start)}~{fmtDate(project.config.period.end).slice(5)}
               </span>
             )}
-            {synthetic && <span className="badge b-bad">합성 데이터</span>}
             <Link href={`/projects/${id}/studio`} className={`btn sm ${onStudio ? "primary" : ""}`}>
               장표 스튜디오
             </Link>

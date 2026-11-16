@@ -7,7 +7,7 @@ import { CauseAction, CauseBadge, RecollectButton } from "@/components/missing-c
 import { SlideMap } from "@/components/slide-map";
 import type { SlideKind } from "@/lib/impact";
 import { Checklist, ErrorBox, Notice, PageIntro, ReasonButton, Stat, Status, fmtDateTime } from "@/components/ui";
-import { api, fileUrl, type DeckOut, type ExportOut, type Job, type QCIssue } from "@/lib/api";
+import { api, ApiError, fileUrl, type DeckOut, type DraftEditOut, type ExportOut, type Job, type QCIssue, type QuickAiEditOut, type SlideSpec } from "@/lib/api";
 import { useAction, useApi, useJob } from "@/lib/hooks";
 
 const TEMPLATE_KIND: Record<string, SlideKind> = { "2-8a": "share", "2-8b": "trend", "2-8c": "combo", "2-8d": "target", "3-1": "creator", C1: "case", C2: "case", M1: "market", "5-recap": "recap", "A-source": "source" };
@@ -40,8 +40,11 @@ export default function OutputPage() {
   const latest = decks?.[0] ?? null;
   const shown = decks?.find((d) => d.status === "ready") ?? null; // last good version stays visible while building
   const { data: deck, reload: reloadDeck } = useApi<DeckOut>(shown ? `/decks/${shown.id}` : null);
+  const { data: edit, reload: reloadEdit } = useApi<DraftEditOut>(shown ? `/decks/${shown.id}/edit` : null);
   const [buildJob, setBuildJob] = useState<string | null>(null);
   const [exportJob, setExportJob] = useState<string | null>(null);
+  const [included, setIncluded] = useState<Set<string>>(new Set());
+  const [rewriting, setRewriting] = useState<string | null>(null);
   const action = useAction();
 
   useEffect(() => {
@@ -50,6 +53,9 @@ export default function OutputPage() {
   useEffect(() => {
     if (shown) void reloadDeck();
   }, [shown?.id, reloadDeck]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (edit) setIncluded(new Set(edit.slides.map((slide) => slide.slide_id)));
+  }, [edit?.edit_version, edit?.deck_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const build = useJob(buildJob, async () => {
     await Promise.all([reloadDecks(), reload()]);
@@ -73,21 +79,78 @@ export default function OutputPage() {
   const startExport = () =>
     action.run(async () => {
       if (!deck) return;
+      if (edit?.edited) {
+        await api.post<ExportOut>(`/decks/${deck.id}/edit/export`);
+        await reloadExports();
+        return;
+      }
       const r = await api.post<{ job: Job }>(`/decks/${deck.id}/exports`, undefined, { "Idempotency-Key": `export-${deck.id}` });
       setExportJob(r.job.id);
-    }, "내보내기를 시작했습니다");
+    }, edit?.edited ? "선택한 장표로 편집 초안을 내보냈습니다" : "내보내기를 시작했습니다");
 
-  const blocks = plan.qc.issues.filter((i) => i.severity === "block");
-  const warns = plan.qc.issues.filter((i) => i.severity === "warn" && i.code !== "SLOT_OMITTED");
+  const reviews = plan.qc.issues.filter((i) => i.code !== "SLOT_OMITTED");
   const building = Boolean(build && !["succeeded", "failed", "cancelled"].includes(build.state));
-  const ready = { qc: (deck?.qc?.blocks ?? 1) === 0, fresh: Boolean(deck && !deck.stale), render: deck?.render_status === "ok" };
-  const canExport = Boolean(deck && deck.status === "ready" && ready.qc && ready.fresh && ready.render);
+  const ready = { fresh: Boolean(deck && !deck.stale), render: deck?.render_status === "ok", export: (deck?.qc?.export_blocks ?? 0) === 0 };
+  const canExport = Boolean(deck && edit && deck.status === "ready" && ready.export && ready.fresh && ready.render);
+  const originalSlides = deck?.spec?.slides ?? [];
+  const currentIds = new Set((edit?.slides ?? []).map((slide) => slide.slide_id));
+  const selectionDirty = originalSlides.length > 0 && originalSlides.some((slide) => included.has(slide.slide_id) !== currentIds.has(slide.slide_id));
+  const saveSelection = () =>
+    action.run(async () => {
+      if (!deck || !edit || included.size === 0) return;
+      const editedById = new Map(edit.slides.map((slide) => [slide.slide_id, slide]));
+      const slides = originalSlides
+        .filter((slide) => included.has(slide.slide_id))
+        .map((slide) => editedById.get(slide.slide_id) ?? slide);
+      await api.put(`/decks/${deck.id}/edit`, { base_version: edit.edit_version, slides, title: edit.title });
+      await reloadEdit();
+    }, `${included.size}장으로 초안을 정리했습니다`);
+  const rewriteSlide = async (slide: SlideSpec, kind: "headline" | "body") => {
+    if (!deck || !edit || selectionDirty || !included.has(slide.slide_id)) return;
+    const editableSlide = edit.slides.find((current) => current.slide_id === slide.slide_id);
+    if (!editableSlide) return;
+    const roles = kind === "headline"
+      ? new Set(["lead", "cover_title", "divider_title"])
+      : new Set(["body", "insight", "takeaway", "caption"]);
+    const elementIds = editableSlide.blocks.filter((block) => block.role && roles.has(block.role)).map((block) => block.block_id);
+    if (elementIds.length === 0) {
+      action.setError(new ApiError(422, "NO_EDITABLE_TEXT", kind === "headline" ? "다시 쓸 제목이 없습니다" : "다듬을 본문이 없습니다"));
+      return;
+    }
+    const key = `${slide.slide_id}:${kind}`;
+    setRewriting(key);
+    await action.run(async () => {
+      const instruction = kind === "headline"
+        ? "선택한 헤드라인을 현재 장표의 근거 범위 안에서 더 명확하고 결론 중심인 한 문장으로 다시 써줘"
+        : "선택한 본문을 현재 의미와 근거는 유지하면서 더 짧고 읽기 쉽게 다듬어줘";
+      const out = await api.post<QuickAiEditOut>(`/decks/${deck.id}/edit/ai`, {
+        message: instruction,
+        slides: edit.slides,
+        current_slide_id: slide.slide_id,
+        scope: "selection",
+        selection: { element_ids: { [slide.slide_id]: elementIds }, areas: [] },
+        history: [],
+      });
+      if (!out.applied.length) return false;
+      const changedById = new Map(out.slides.map((changed) => [changed.slide_id, changed]));
+      const merged = edit.slides.map((current) => changedById.get(current.slide_id) ?? current);
+      await api.post(`/decks/${deck.id}/edit/log/${out.log_id}/apply`, {
+        base_version: edit.edit_version,
+        slides_before: edit.slides,
+        slides: merged,
+        title: edit.title,
+      });
+      await reloadEdit();
+      return true;
+    }, (changed) => changed
+      ? (kind === "headline" ? "헤드라인을 다시 썼습니다" : "본문을 다듬었습니다")
+      : (kind === "headline" ? "이미 한 문장으로 정리된 제목입니다" : "이미 충분히 간결한 본문입니다"));
+    setRewriting(null);
+  };
 
   return (
     <div className="stack-lg">
-      <PageIntro step="5단계" title="팩트북 출력">검수를 통과하면 초안을 만들고 내보냅니다.</PageIntro>
-      {plan.synthetic_data && <Notice tone="warn">정량 장표가 합성 테스트 자료로 만들어집니다. 해당 장표와 표지에 ‘합성 테스트 자료’가 표시됩니다.</Notice>}
-
+      <PageIntro step="5단계" title="초안 만들기">가능한 자료로 초안을 먼저 만들고, 필요한 부분만 빠르게 확인합니다.</PageIntro>
       <div className="stats" aria-label="장표 현황">
         <Stat k="계획한 장표" v={plan.counts.planned} />
         <Stat k="만들 수 있는 장표" v={plan.counts.generated} tone="ok" />
@@ -116,51 +179,33 @@ export default function OutputPage() {
       <section className="card" aria-labelledby="s-a">
         <div className="card-head">
           <div className="grow">
-            <h2 id="s-a">① 출력 전 검수</h2>
-            <p>차단 항목이 0이어야 내보낼 수 있습니다.</p>
+            <h2 id="s-a">① 초안 준비 상태</h2>
+            <p>확인 항목이 있어도 초안 생성과 내보내기는 계속할 수 있습니다.</p>
           </div>
-          {blocks.length === 0 ? <span className="badge b-ok">✓ 차단 없음</span> : <span className="badge b-bad">✕ 차단 {blocks.length}건</span>}
+          {reviews.length === 0 ? <span className="badge b-ok">✓ 바로 사용 가능</span> : <span className="badge b-warn">! 확인 권장 {reviews.length}건</span>}
         </div>
-        {blocks.length > 0 && (
-          <ul className="list">
-            {blocks.map((i, k) => {
-              const fix = fixLink(pid, i);
-              return (
-                <li key={k}>
-                  <Status value="block" />
-                  <div className="grow">
-                    <div className="strong">{i.message}</div>
-                    <div className="meta">
-                      {i.slide_id ? `${i.slide_id} 장표 · ` : ""}
-                      {i.action}
-                    </div>
-                  </div>
-                  {fix && (
-                    <a className="btn sm" href={fix.href}>
-                      {fix.label}
-                    </a>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+        {(plan.qc.actions ?? []).length > 0 && (
+          <div className="stats mt8" aria-label="확인 권장 항목">
+            {(plan.qc.actions ?? []).map((item) => <Stat key={item.key} k={item.label} v={item.slides || item.count} tone="warn" />)}
+          </div>
         )}
-        {warns.length > 0 && (
+        {reviews.length > 0 && (
           <details className="more">
-            <summary>확인할 경고 {warns.length}건</summary>
+            <summary>세부 확인 항목 {reviews.length}건</summary>
             <ul className="list mt8">
-              {warns.map((i, k) => (
-                <li key={k}>
-                  <Status value="warn" />
-                  <div className="grow">
-                    <div>{i.message}</div>
-                    <div className="meta">
-                      {i.slide_id ? `${i.slide_id} 장표 · ` : ""}
-                      {i.action}
+              {reviews.map((i, k) => {
+                const fix = fixLink(pid, i);
+                return (
+                  <li key={k}>
+                    <Status value="warn" />
+                    <div className="grow">
+                      <div>{i.message}</div>
+                      <div className="meta">{i.slide_id ? `${i.slide_id} 장표 · ` : ""}{i.action}</div>
                     </div>
-                  </div>
-                </li>
-              ))}
+                    {fix && <a className="btn sm" href={fix.href}>{fix.label}</a>}
+                  </li>
+                );
+              })}
             </ul>
           </details>
         )}
@@ -241,6 +286,7 @@ export default function OutputPage() {
             <div className="row wrap" style={{ marginBottom: 14, gap: 8 }}>
               <strong>초안 v{deck.version}</strong>
               <span className="small muted">{fmtDateTime(deck.created_at)}</span>
+              <Status value={deck.draft_status ?? "ready"} />
               <Status value={deck.render_status} />
               {deck.stale ? <span className="badge b-bad">! 이후 자료가 바뀜 — 다시 만들기 필요</span> : <span className="badge b-ok">✓ 현재 자료와 일치</span>}
               <span className="grow" />
@@ -253,10 +299,27 @@ export default function OutputPage() {
                 </Link>
               )}
             </div>
+            {edit && originalSlides.length > 0 && (
+              <div className="sub row wrap" style={{ gap: 8, marginBottom: 14 }}>
+                <div className="grow">
+                  <strong>사용할 장표 선택</strong>
+                  <div className="small muted">{included.size} / {originalSlides.length}장 · 필요 없는 장표를 끄고 한 번에 저장하세요.</div>
+                </div>
+                <button className="btn sm" onClick={() => setIncluded(new Set(originalSlides.map((slide) => slide.slide_id)))} disabled={included.size === originalSlides.length}>
+                  모두 선택
+                </button>
+                <button className="btn sm" onClick={() => setIncluded(new Set(edit.slides.map((slide) => slide.slide_id)))} disabled={!selectionDirty}>
+                  선택 되돌리기
+                </button>
+                <button className="btn sm primary" onClick={saveSelection} disabled={!selectionDirty || included.size === 0 || action.busy}>
+                  선택 저장
+                </button>
+              </div>
+            )}
             {deck.render_status !== "ok" && <Notice tone="warn">{deck.render_message ?? "실제 렌더 미리보기를 만들지 못했습니다."}</Notice>}
             <ul className="slides" style={{ listStyle: "none", padding: 0, margin: 0 }}>
               {(deck.spec?.slides ?? []).map((s, i) => (
-                <li key={s.slide_id}>
+                <li key={s.slide_id} style={{ opacity: !edit || included.has(s.slide_id) ? 1 : 0.48 }}>
                   <Link href={`/projects/${pid}/studio?page=${i + 1}`} className="slide-thumb" aria-label={`${i + 1}쪽 ${s.title} 스튜디오에서 보기`}>
                     {deck.render_status === "ok" ? (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -272,6 +335,31 @@ export default function OutputPage() {
                       {s.needs_review && <span className="badge b-warn">리드 확인</span>}
                     </div>
                   </Link>
+                  {edit && (
+                    <div className="stack" style={{ gap: 5, padding: "6px 2px" }}>
+                      <label className="row small" style={{ gap: 6, cursor: "pointer" }}>
+                        <input
+                          type="checkbox"
+                          checked={included.has(s.slide_id)}
+                          onChange={(event) => setIncluded((current) => {
+                            const next = new Set(current);
+                            if (event.target.checked) next.add(s.slide_id);
+                            else if (next.size > 1) next.delete(s.slide_id);
+                            return next;
+                          })}
+                        />
+                        초안에 포함
+                      </label>
+                      <div className="row wrap" style={{ gap: 5 }}>
+                        <button className="btn sm" title={selectionDirty ? "장표 선택을 먼저 저장하세요" : undefined} disabled={selectionDirty || !included.has(s.slide_id) || action.busy} onClick={() => void rewriteSlide(s, "headline")}>
+                          {rewriting === `${s.slide_id}:headline` ? "다시 쓰는 중…" : "제목 다시 쓰기"}
+                        </button>
+                        <button className="btn sm" title={selectionDirty ? "장표 선택을 먼저 저장하세요" : undefined} disabled={selectionDirty || !included.has(s.slide_id) || action.busy} onClick={() => void rewriteSlide(s, "body")}>
+                          {rewriting === `${s.slide_id}:body` ? "다듬는 중…" : "본문 다듬기"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>
@@ -283,8 +371,8 @@ export default function OutputPage() {
       <section className="card" aria-labelledby="s-c">
         <div className="card-head">
           <div className="grow">
-            <h2 id="s-c">③ 확정 내보내기</h2>
-            <p>미리보기한 파일 그대로 PPTX와 원장을 내보냅니다.</p>
+            <h2 id="s-c">③ 초안 내보내기</h2>
+            <p>{edit?.edited ? `선택한 ${edit.slides.length}장으로 편집한 초안을 내려받습니다.` : "확인 항목이 남아 있어도 미리보기한 초안을 내려받을 수 있습니다."}</p>
           </div>
           <button className="btn primary lg" onClick={startExport} disabled={!canExport || action.busy} aria-describedby="export-conds">
             PPTX·원장 내보내기
@@ -294,7 +382,6 @@ export default function OutputPage() {
           <Checklist
             items={[
               { done: Boolean(deck), text: "초안이 있음" },
-              { done: Boolean(deck) && ready.qc, text: "검수 차단 0건" },
               { done: Boolean(deck) && ready.fresh, text: "초안이 현재 자료와 일치 (자료를 바꿨다면 다시 만들기)" },
               { done: Boolean(deck) && ready.render, text: "실제 PPTX 렌더 미리보기 확인됨" },
             ]}
@@ -314,7 +401,7 @@ export default function OutputPage() {
                   <strong>초안 v{e.deck_version}</strong>
                   {idx === 0 && <span className="badge b-brand">최신</span>}
                   <span className="small muted num">
-                    {fmtDateTime(e.generated_at)} · 검수 차단 {e.qc.blocks} · 경고 {e.qc.warns}
+                    {fmtDateTime(e.generated_at)} · 확인 권장 {e.qc.blocks + e.qc.warns}건
                   </span>
                 </div>
                 <ul className="grid cols-4" style={{ listStyle: "none", padding: 0, margin: 0, gap: 8 }}>

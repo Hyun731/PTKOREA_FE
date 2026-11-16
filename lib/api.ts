@@ -318,7 +318,7 @@ export type Material = {
   duplicate_reason: string | null;
   event_name: string | null;
   summary: string | null; // 해석 요약: what was done, why, how it landed
-  extraction_status?: "pending" | "done" | "failed" | null; // pending: 요약·수치는 자료를 처음 열 때 만든다
+  extraction_status?: "pending" | "done" | "failed" | null; // pending: 사용자가 이 근거를 선택하면 요약·수치를 만든다
   scope_id: string | null; // its item in the 3C plan
   role: "self" | "competitor" | "benchmark" | "market" | null;
   featured: boolean;
@@ -326,7 +326,7 @@ export type Material = {
   updated_at: string;
 };
 
-export type Batch = { id: string; kind: "facts" | "posts" | "client"; filename: string; status: string; total_rows: number; valid_rows: number; errors: { row_no: number; column: string | null; code: string; message: string }[]; duplicates: unknown[]; synthetic: boolean; reviewed_by: string | null; created_at: string; has_source_file?: boolean };
+export type Batch = { id: string; kind: "facts" | "posts" | "client"; filename: string; status: string; total_rows: number; valid_rows: number; errors: { row_no: number; column: string | null; code: string; message: string }[]; duplicates: unknown[]; reviewed_by: string | null; created_at: string; has_source_file?: boolean };
 
 // Phase 2 커머스 리뷰 — 판매 플랫폼 공개 페이지에서 모은 대표 상품 평점·리뷰 스냅샷(CM1/CM2).
 export type ReviewKeyword = {
@@ -359,7 +359,8 @@ export type ReviewSnapshot = {
 };
 
 export type QCIssue = { code: string; severity: "block" | "warn"; message: string; action: string; slide_id: string | null; block_id: string | null };
-export type QC = { blocks: number; warns: number; issues: QCIssue[] };
+export type QCAction = { key: string; label: string; count: number; slides: number };
+export type QC = { blocks: number; warns: number; export_blocks?: number; review_required?: boolean; actions?: QCAction[]; issues: QCIssue[] };
 
 export type Slot = { slot_id: string; section_id: string; template_id: string; brand_id: string | null; label: string; readiness: "ready" | "needs_input" | "omitted"; reason: string | null; slide_ids: string[]; cause?: MissingCause | null; action?: string | null; item_ids?: string[] };
 
@@ -370,7 +371,6 @@ export type SlidePlanOut = {
   qc: QC;
   findings: { id: string; rule_id: string; brand_id: string; strength: string; expression: string }[];
   metric_issues: { code: string; message: string; brand_id: string | null }[];
-  synthetic_data: boolean;
 };
 
 export type Job = { id: string; kind: string; state: string; progress: number; result: Record<string, unknown>; error_code: string | null; error_message: string | null; created_at: string; finished_at: string | null };
@@ -378,9 +378,17 @@ export type Job = { id: string; kind: string; state: string; progress: number; r
 export type Binding = { block_id: string; fact_id: string; entity: string | null; metric: string; unit: string; formatter: string; display: string };
 export type SlideSpec = { slide_id: string; version: number; template_id: string; page_role: string; section_id: string | null; title: string; blocks: { kind: string; block_id: string; role?: string; paragraphs?: { parts: Part[]; bullet?: string | null }[] }[]; bindings: Binding[]; finding_ids: string[]; asset_ids: string[]; source_ids: string[]; notes: string; parent_slide_id: string | null; page_no: number | null; needs_review: boolean; is_data: boolean };
 
-export type DeckOut = { id: string; version: number; status: string; qc: QC | null; render_status: string; render_message: string | null; pages: number; job_id: string | null; created_at: string; stale: boolean; spec?: { slides: SlideSpec[]; plan: Slot[]; synthetic_data: boolean } };
+export type DeckOut = { id: string; version: number; status: string; draft_status?: "ready" | "ready_with_review" | string; qc: QC | null; render_status: string; render_message: string | null; pages: number; job_id: string | null; created_at: string; stale: boolean; spec?: { slides: SlideSpec[]; plan: Slot[] } };
+export type DraftEditOut = { deck_id: string; edit_version: number; edited: boolean; title: string; slides: SlideSpec[]; qc: QC };
+export type QuickAiEditOut = {
+  reply: string;
+  applied: { op: string; slide_id: string; element_id: string | null; summary: string; reason: string }[];
+  changed: Record<string, string[]>;
+  slides: SlideSpec[];
+  log_id: string;
+};
 
-export type ExportOut = { id: string; deck_id: string; deck_version: number; qc: { blocks: number; warns: number }; files: string[]; generated_at: string };
+export type ExportOut = { id: string; deck_id: string; deck_version: number; qc: { blocks: number; warns: number; export_blocks?: number; review_required?: boolean }; files: string[]; generated_at: string };
 
 export type Meta = {
   profiles: { id: string; label: string }[];

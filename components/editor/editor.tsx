@@ -77,7 +77,6 @@ export function DeckEditor({ deckId }: { deckId: string }) {
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
-  const [mode, setMode] = useState<"claude" | "mock">("mock");
   const [scopePick, setScopePick] = useState<Scope | null>(null);
   const [flash, setFlash] = useState<Set<string>>(new Set());
   const [present, setPresent] = useState<number | null>(null);
@@ -116,7 +115,6 @@ export function DeckEditor({ deckId }: { deckId: string }) {
         dispatch({ t: "reset", doc: { slides: m.slides, title: m.title } });
         setCur(m.slides[0]?.slide_id ?? "");
         setQc(m.qc);
-        setMode(m.ai.available ? "claude" : "mock");
         try {
           const raw = localStorage.getItem(`ptk-editor-chat-${deckId}`);
           if (raw) setMessages((JSON.parse(raw) as ChatMsg[]).map((x) => (x.role === "ai" && x.status === "pending" ? { ...x, status: "cancelled" } : x)));
@@ -313,16 +311,15 @@ export function DeckEditor({ deckId }: { deckId: string }) {
         scope: effective,
         selection: { element_ids: selected.length ? { [cur]: selected } : {}, areas: allAreas },
         history,
-        mode,
       });
       const status = out.applied.length ? "pending" : "empty";
-      setMessages((m) => [...m, { id: `a${Date.now()}`, role: "ai", text: out.reply || "바꿀 내용이 없습니다.", mode: out.mode, result: out, status, areaIds: allAreas.map((a) => a.id) }]);
+      setMessages((m) => [...m, { id: `a${Date.now()}`, role: "ai", text: out.reply || "바꿀 내용이 없습니다.", result: out, status, areaIds: allAreas.map((a) => a.id) }]);
       const firstChanged = Object.keys(out.changed)[0];
       if (firstChanged && firstChanged !== cur && !out.changed[cur]) setCur(firstChanged);
     } catch (e) {
       const err = e as ApiError;
       setAiError(`${err.message}${err.action ? ` — ${err.action}` : ""}`);
-      setMessages((m) => [...m, { id: `a${Date.now()}`, role: "ai", text: `요청을 처리하지 못했습니다: ${err.message}`, mode, status: "error" }]);
+      setMessages((m) => [...m, { id: `a${Date.now()}`, role: "ai", text: `요청을 처리하지 못했습니다: ${err.message}`, status: "error" }]);
     } finally {
       setAiBusy(false);
     }
@@ -471,8 +468,10 @@ export function DeckEditor({ deckId }: { deckId: string }) {
         const dx = e.key === "ArrowLeft" ? -d : e.key === "ArrowRight" ? d : 0;
         const dy = e.key === "ArrowUp" ? -d : e.key === "ArrowDown" ? d : 0;
         editSelected((b) => ({ ...b, region: clampRegion({ ...b.region, x: b.region.x + dx, y: b.region.y + dy }) }) as Block);
-      } else if (!selected.length && (e.key === "PageDown" || e.key === "PageUp")) {
-        const n = idx + (e.key === "PageDown" ? 1 : -1);
+      } else if (!selected.length && ["ArrowLeft", "ArrowRight", "PageDown", "PageUp"].includes(e.key)) {
+        e.preventDefault();
+        const forward = e.key === "ArrowRight" || e.key === "PageDown";
+        const n = idx + (forward ? 1 : -1);
         if (shownSlides[n]) selectSlide(shownSlides[n].slide_id);
       }
     };
@@ -875,9 +874,7 @@ export function DeckEditor({ deckId }: { deckId: string }) {
           scope={scope}
           autoScope={scopePick === null}
           onScope={setScopePick}
-          modes={meta.ai.modes}
-          mode={mode}
-          onMode={setMode}
+          available={meta.ai.available}
           messages={messages}
           busy={aiBusy}
           error={aiError}
