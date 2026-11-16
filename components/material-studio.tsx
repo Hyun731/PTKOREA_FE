@@ -376,7 +376,7 @@ export function MaterialStudio({ id, projectId, onClose, onChanged }: { id: stri
         m && (
           <>
             <span className="grow" />
-            <ErrorBox error={action.error} />
+            <ErrorBox error={action.error ?? extract.error} />
             {m.review_status === "excluded" ? (
               <button className="btn" disabled={action.busy} onClick={() => review("candidate", "되돌렸습니다")}>
                 되돌리기
@@ -397,6 +397,8 @@ export function MaterialStudio({ id, projectId, onClose, onChanged }: { id: stri
     >
       {!m ? (
         <p className="muted">불러오는 중…</p>
+      ) : extract.busy ? (
+        <p className="muted" role="status">AI가 원문을 읽고 요약·수치·문장을 만드는 중입니다 · 처음 열 때 한 번만 합니다</p>
       ) : (
         <div className="studio with-chat">
           <ChatSide m={m} />
