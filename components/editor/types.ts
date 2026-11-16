@@ -111,14 +111,14 @@ export type EditOut = {
   stale: boolean;
   slides: Slide[];
   qc: QC;
-  ai: { available: boolean; modes: ("claude" | "mock")[] };
+  ai: { available: boolean };
 };
 
 /** A marked area, relative to the slide (0..1) so zoom never moves it. */
 export type Area = { id: string; slide_id: string; x: number; y: number; w: number; h: number };
 
 export type AiOut = {
-  mode: "claude" | "mock";
+  mode: "claude";
   reply: string;
   scope: Scope;
   target: { slide_ids: string[]; element_ids: Record<string, string[]> };
@@ -140,7 +140,7 @@ export type EditLogEntry = {
   status: "proposed" | "applied" | "cancelled";
   message: string;
   reply: string;
-  mode: "claude" | "mock" | null;
+  mode: string | null;
   scope: Scope | null;
   slide_ids: string[];
   applied: { op: string; slide_id: string; element_id: string | null; summary: string }[];

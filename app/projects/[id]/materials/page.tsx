@@ -29,11 +29,6 @@ function CsvSection({ pid, onChanged }: { pid: string; onChanged: () => void }) 
       await api.post(`/projects/${pid}/imports`, fd);
       await after();
     }, "CSV를 올렸습니다. 확인한 뒤 채택하세요");
-  const sample = (posts: string) =>
-    action.run(async () => {
-      await api.post(`/projects/${pid}/imports/sample?posts=${posts}`);
-      await after();
-    }, "합성 샘플 CSV를 불러왔습니다");
   // 보유 자료(client)는 아래 따로 둔 섹션에서 올리고 채택한다.
   const visible = (batches ?? []).filter((b) => b.status !== "replaced" && b.kind !== "client");
   const review = (b: Batch, act: "accept" | "reject") =>
@@ -61,10 +56,6 @@ function CsvSection({ pid, onChanged }: { pid: string; onChanged: () => void }) 
           </label>
         </div>
         <FileButton label="CSV 파일 선택" accept=".csv,text/csv" onFile={upload} disabled={action.busy} />
-        <span className="grow" />
-        <button className="btn ghost" onClick={() => sample("posts.csv")} disabled={action.busy}>
-          합성 샘플 불러오기
-        </button>
       </div>
       <ErrorBox error={action.error} />
       {visible.length > 0 && (
@@ -75,7 +66,6 @@ function CsvSection({ pid, onChanged }: { pid: string; onChanged: () => void }) 
                 <div className="row wrap" style={{ gap: 8 }}>
                   <span className="title">{b.filename}</span>
                   <Status value={b.status} />
-                  {b.synthetic && <span className="badge b-bad">합성 데이터</span>}
                 </div>
                 <div className="meta num">
                   유효 {b.valid_rows}/{b.total_rows}행{b.errors.length ? ` · 오류 ${b.errors.length}행` : ""} · {fmtDate(b.created_at)}
@@ -103,13 +93,6 @@ function CsvSection({ pid, onChanged }: { pid: string; onChanged: () => void }) 
           ))}
         </ul>
       )}
-      <details className="more">
-        <summary>표 분할 확인용 13행 샘플</summary>
-        <p className="small muted mt8">인플루언서 표가 두 장으로 나뉘는지 확인하는 테스트 자료입니다.</p>
-        <button className="btn sm mt8" onClick={() => sample("posts_13.csv")} disabled={action.busy}>
-          13행 게시물 샘플 불러오기
-        </button>
-      </details>
     </section>
   );
 }
@@ -356,7 +339,9 @@ function MaterialGrid({ cards, brandName, onOpen }: { cards: Material[]; brandNa
                 {m.summary ? (
                   <div className="summary">{m.summary}</div>
                 ) : m.extraction_status === "pending" ? (
-                  <div className="summary muted">{m.excerpt ? `${m.excerpt.slice(0, 120)}… · ` : ""}열면 AI가 원문을 읽고 요약합니다</div>
+                  <div className="summary muted">{m.excerpt ? `${m.excerpt.slice(0, 120)}… · ` : ""}누르면 이 근거만 AI가 요약합니다</div>
+                ) : m.extraction_status === "failed" ? (
+                  <div className="summary muted">자동 요약을 완료하지 못했습니다 · 눌러서 다시 확인</div>
                 ) : null}
                 <div className="meta num">
                   이미지 {m.assets.length} · 수치 {m.facts.length} · 채택 문장 {acceptedClaims}/{m.claims.length}

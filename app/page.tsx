@@ -36,12 +36,6 @@ export default function Home() {
       const p = await api.post<ProjectOut>("/projects", { ...draft, brands });
       router.push(`/projects/${p.id}/setup`);
     }, "프로젝트를 만들었습니다");
-  const sample = () =>
-    action.run(async () => {
-      const p = await api.post<ProjectOut>("/projects/sample");
-      router.push(`/projects/${p.id}/materials`);
-    }, "합성 샘플 프로젝트를 만들었습니다");
-
   const details = Array.isArray(action.error?.detail) ? (action.error!.detail as { loc: string; msg: string }[]) : [];
   const missing = !draft.name.trim() || !draft.client.trim() || !draft.brands[0]?.name.trim() || draft.brands[0]?.competitors.length === 0;
 
@@ -101,16 +95,6 @@ export default function Home() {
             <button className="btn primary lg" onClick={() => setCreating(true)}>
               새 프로젝트 만들기
             </button>
-            <a
-              href="#"
-              className="small"
-              onClick={(e) => {
-                e.preventDefault();
-                sample();
-              }}
-            >
-              또는 가짜 데이터로 채워진 샘플 먼저 둘러보기
-            </a>
           </div>
         </div>
       )}

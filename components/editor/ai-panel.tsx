@@ -6,7 +6,7 @@ import type { AiOut, Area, EditLogEntry, Scope } from "./types";
 
 export type ChatMsg =
   | { id: string; role: "user"; text: string; scope: Scope; context: string }
-  | { id: string; role: "ai"; text: string; mode: "claude" | "mock"; result?: AiOut; status: "pending" | "applied" | "cancelled" | "empty" | "error"; areaIds?: string[] };
+  | { id: string; role: "ai"; text: string; result?: AiOut; status: "pending" | "applied" | "cancelled" | "empty" | "error"; areaIds?: string[] };
 
 const SCOPE_LABEL: Record<Scope, string> = { selection: "선택 영역", slide: "현재 슬라이드", deck: "전체 슬라이드" };
 const OP_LABEL: Record<string, string> = {
@@ -33,9 +33,7 @@ export function AiPanel({
   scope,
   autoScope,
   onScope,
-  modes,
-  mode,
-  onMode,
+  available,
   messages,
   busy,
   error,
@@ -59,9 +57,7 @@ export function AiPanel({
   scope: Scope;
   autoScope: boolean;
   onScope: (s: Scope | null) => void;
-  modes: ("claude" | "mock")[];
-  mode: "claude" | "mock";
-  onMode: (m: "claude" | "mock") => void;
+  available: boolean;
   messages: ChatMsg[];
   busy: boolean;
   error: string | null;
@@ -86,7 +82,7 @@ export function AiPanel({
   const pending = messages.some((m) => m.role === "ai" && m.status === "pending");
   const send = () => {
     const t = text.trim();
-    if (!t || busy || pending) return;
+    if (!t || busy || pending || !available) return;
     onSend(t);
     setText("");
   };
@@ -100,15 +96,7 @@ export function AiPanel({
         </span>
         <div className="ed-ai-title">
           <strong>AI 편집</strong>
-          <span>{mode === "mock" ? "Mock · 규칙 기반, 모델 호출 없음" : "Claude · 편집 명령으로 수정"}</span>
-        </div>
-        <span className="spacer" />
-        <div className="ed-seg sm" role="radiogroup" aria-label="AI 모드">
-          {(["claude", "mock"] as const).map((m) => (
-            <button key={m} type="button" role="radio" aria-checked={mode === m} disabled={!modes.includes(m)} className={mode === m ? "on" : ""} onClick={() => onMode(m)}>
-              {m === "claude" ? "Claude" : "Mock"}
-            </button>
-          ))}
+          <span>{available ? "Claude · 편집 명령으로 수정" : "Anthropic 설정이 필요합니다"}</span>
         </div>
       </header>
       <div className="ed-ai-tabs" role="tablist" aria-label="AI 패널">
@@ -180,7 +168,7 @@ export function AiPanel({
             <div key={m.id} className={`ed-msg ai ${m.status}`}>
               <div className="ed-msg-meta">
                 <Icon name="sparkle" size={12} />
-                {m.mode === "mock" ? "Mock" : "Claude"}
+                Claude
                 {m.status === "applied" && <span className="ed-status ok">적용됨</span>}
                 {m.status === "cancelled" && <span className="ed-status">취소됨</span>}
                 {m.status === "pending" && <span className="ed-status live">미리보기</span>}
@@ -269,14 +257,14 @@ export function AiPanel({
                 send();
               }
             }}
-            placeholder={pending ? "미리보기를 적용하거나 취소한 뒤 이어서 요청하세요" : hasSelection ? "선택한 부분을 어떻게 바꿀까요?" : "이 슬라이드를 어떻게 바꿀까요?"}
+            placeholder={!available ? "서버에 Anthropic 키와 모델을 설정하세요" : pending ? "미리보기를 적용하거나 취소한 뒤 이어서 요청하세요" : hasSelection ? "선택한 부분을 어떻게 바꿀까요?" : "이 슬라이드를 어떻게 바꿀까요?"}
             rows={3}
-            disabled={busy || pending}
+            disabled={!available || busy || pending}
             aria-label="AI에게 수정 요청"
           />
           <div className="ed-composer-foot">
             <span className="ed-hint">Enter 보내기 · Shift+Enter 줄바꿈</span>
-            <button type="submit" className="ed-send" disabled={!text.trim() || busy || pending} aria-label="보내기">
+            <button type="submit" className="ed-send" disabled={!available || !text.trim() || busy || pending} aria-label="보내기">
               <Icon name="send" size={16} />
             </button>
           </div>
@@ -317,7 +305,7 @@ function HistoryList({ log, slideNoOf, onRestore, onFocus, disabled }: { log: Ed
               </button>
               <span className={`ed-log-kind ${e.kind}`}>{KIND[e.kind]}</span>
               <span className={`ed-status ${e.status === "applied" ? "ok" : ""}`}>{STATUS[e.status]}</span>
-              {e.mode && <span className="ed-hint">{e.mode === "claude" ? "Claude" : "Mock"}</span>}
+              {e.mode && <span className="ed-hint">AI 편집</span>}
               <span className="spacer" />
               <time className="ed-hint">{when(e.created_at)}</time>
             </div>

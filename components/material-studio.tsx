@@ -49,7 +49,21 @@ function FillIn({ label, type = "text", onSave }: { label: string; type?: "text"
 const FACT_STATE: Record<string, [string, string]> = { eligible: ["맞음", "b-ok"], rejected: ["뺌", "b-outline"], candidate: ["확인 전", "b-warn"] };
 
 /** Middle: what this material is — image, source, 해석 요약, numbers from the page. Gaps are filled in place. */
-function UnderstandPane({ m, projectId, onChanged }: { m: Material; projectId: string; onChanged: () => Promise<void> }) {
+function UnderstandPane({
+  m,
+  projectId,
+  onChanged,
+  extracting,
+  extractionError,
+  onExtract,
+}: {
+  m: Material;
+  projectId: string;
+  onChanged: () => Promise<void>;
+  extracting: boolean;
+  extractionError: ReturnType<typeof useAction>["error"];
+  onExtract: () => void;
+}) {
   const asset = m.assets.find((a) => a.id === m.selected_asset_id) ?? m.assets.find((a) => a.review_status !== "excluded");
   const others = m.assets.filter((a) => a.review_status !== "excluded");
   const action = useAction();
@@ -76,7 +90,6 @@ function UnderstandPane({ m, projectId, onChanged }: { m: Material; projectId: s
   const patch = (changes: Record<string, string>) => run(() => api.patch(`/materials/${m.id}`, { base_version: m.version, ...changes }));
   const fact = (f: FactOut, action_: "confirm" | "reject") =>
     run(() => api.patch(`/facts/${f.id}/review?project_id=${projectId}`, { action: action_, note: action_ === "reject" ? "자료 카드에서 뺌" : undefined }));
-  const summarize = () => run(() => api.post(`/materials/${m.id}/summary`));
   const date = m.activity_date ?? m.source.published_at;
   return (
     <div className="studio-pane">
@@ -128,18 +141,39 @@ function UnderstandPane({ m, projectId, onChanged }: { m: Material; projectId: s
           </>
         )}
       </div>
-      <section aria-labelledby={`sum-${m.id}`}>
-        <h4 id={`sum-${m.id}`}>해석 요약</h4>
+      <section aria-labelledby={`sum-${m.id}`} aria-live="polite">
+        <h4 id={`sum-${m.id}`}>이 근거 요약</h4>
         {m.summary ? (
           <p className="studio-summary">{m.summary}</p>
-        ) : (
-          <div className="row" style={{ gap: 8 }}>
-            <span className="small muted grow">아직 요약이 없습니다.</span>
-            <button className="btn sm" disabled={action.busy} onClick={summarize}>
-              요약 만들기
+        ) : extractionError ? (
+          <div className="studio-summary failed">
+            <div className="grow">
+              <strong>이 근거를 자동으로 요약하지 못했습니다.</strong>
+              <span>잠시 뒤 이 자료만 다시 분석할 수 있습니다.</span>
+            </div>
+            <button className="btn sm" disabled={extracting} onClick={onExtract}>
+              다시 분석
             </button>
           </div>
+        ) : extracting || m.extraction_status === "pending" ? (
+          <div className="studio-summary loading" role="status">
+            <strong>선택한 근거를 읽고 있습니다.</strong>
+            <span>이 자료의 요약·수치·문장만 만들며, 완료된 결과는 다시 열 때 재사용합니다.</span>
+          </div>
+        ) : m.extraction_status === "failed" ? (
+          <div className="studio-summary failed">
+            <div className="grow">
+              <strong>이 근거를 자동으로 요약하지 못했습니다.</strong>
+              <span>원문 접근 상태를 확인한 뒤 이 자료만 다시 분석할 수 있습니다.</span>
+            </div>
+            <button className="btn sm" disabled={extracting} onClick={onExtract}>
+              다시 분석
+            </button>
+          </div>
+        ) : (
+          <p className="studio-summary empty">이 자료에는 아직 자동으로 생성된 요약이 없습니다.</p>
         )}
+        <ErrorBox error={extractionError} />
       </section>
       {m.facts.length > 0 && (
         <section aria-labelledby={`fx-${m.id}`}>
@@ -305,16 +339,21 @@ export function MaterialStudio({ id, projectId, onClose, onChanged }: { id: stri
     await reload();
     onChanged();
   };
-  // 수집 때는 원문만 저장한다 — 처음 열 때 한 번 AI가 요약·수치·문장을 만들고, 다시 열면 저장된 결과를 쓴다.
+  // 자료 카드를 선택했을 때 그 근거 하나만 분석하고, 다시 열면 저장된 결과를 쓴다.
   const extract = useAction();
   const asked = useRef(false);
-  useEffect(() => {
-    if (!m || m.extraction_status !== "pending" || asked.current) return;
-    asked.current = true;
-    extract.run(async () => {
+  const extractEvidence = () =>
+    void extract.run(async () => {
       await api.post(`/materials/${id}/extract`);
       await refresh();
     });
+  useEffect(() => {
+    asked.current = false;
+  }, [id]);
+  useEffect(() => {
+    if (!m || m.extraction_status !== "pending" || asked.current) return;
+    asked.current = true;
+    extractEvidence();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [m?.extraction_status, id]);
   const review = (status: "accepted" | "excluded" | "candidate", msg: string) =>
@@ -363,7 +402,14 @@ export function MaterialStudio({ id, projectId, onClose, onChanged }: { id: stri
       ) : (
         <div className="studio with-chat">
           <ChatSide m={m} />
-          <UnderstandPane m={m} projectId={projectId} onChanged={refresh} />
+          <UnderstandPane
+            m={m}
+            projectId={projectId}
+            onChanged={refresh}
+            extracting={extract.busy}
+            extractionError={extract.error}
+            onExtract={extractEvidence}
+          />
           <WritePane m={m} onChanged={refresh} />
         </div>
       )}

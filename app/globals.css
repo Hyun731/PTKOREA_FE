@@ -401,6 +401,10 @@ table.table input, table.table select { min-height: 38px; }
 .studio-pane h4 { margin: 0 0 6px; font-size: 14.5px; }
 .studio-image { height: 260px; border-radius: var(--radius-sm); background: var(--surface-3); display: flex; align-items: center; justify-content: center; overflow: hidden; }
 .studio-summary { margin: 0; font-size: 14.5px; line-height: 1.65; background: var(--brand-soft); color: var(--text); border-radius: var(--radius-sm); padding: 10px 12px; }
+.studio-summary.loading, .studio-summary.failed { display: flex; flex-direction: column; gap: 3px; border: 1px solid var(--line); background: var(--surface-2); }
+.studio-summary.loading span, .studio-summary.failed span { display: block; color: var(--text-2); font-size: 13px; }
+.studio-summary.failed { align-items: flex-start; }
+.studio-summary.empty { background: var(--surface-2); color: var(--text-2); }
 .studio-chat { display: flex; flex-direction: column; gap: 8px; }
 .studio-chat textarea, .studio-pane textarea { flex: 1; min-width: 0; width: 100%; }
 .studio-claims { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
